@@ -44,6 +44,29 @@ export interface ParsedChatMessage {
     text: string;
 }
 
+/** Rich-object parameter for a file shared into the room (from object.content) */
+export interface FileParameter {
+    type: 'file';
+    id: string;
+    name: string;
+    size?: string;
+    /** Path relative to the sharer's storage, e.g. "Talk/test.png" */
+    path?: string;
+    /** Public share link (`/s/<token>`) or file page link (`/f/<id>`) */
+    link?: string;
+    mimetype?: string;
+    etag?: string;
+    'preview-available'?: string;
+    width?: string;
+    height?: string;
+}
+
+export interface ImageAttachment {
+    mimeType: string;
+    base64Data: string;
+    fileName?: string;
+}
+
 /** Replaces rich-object placeholders like {mention-user1} with @DisplayName */
 export function renderMessageText(contentJson: string | undefined): string {
     if (!contentJson) return '';
@@ -61,5 +84,27 @@ export function renderMessageText(contentJson: string | undefined): string {
         return text.trim();
     } catch {
         return '';
+    }
+}
+
+/**
+ * Finds an image file parameter in a message's rich-object content.
+ * Returns null when the message carries no image attachment.
+ */
+export function extractImageFromContent(contentJson: string | undefined): FileParameter | null {
+    if (!contentJson) return null;
+    try {
+        const parsed = JSON.parse(contentJson) as {
+            message?: string;
+            parameters?: Record<string, FileParameter>;
+        };
+        for (const param of Object.values(parsed.parameters || {})) {
+            if (param?.type === 'file' && typeof param.mimetype === 'string' && param.mimetype.startsWith('image/')) {
+                return param;
+            }
+        }
+        return null;
+    } catch {
+        return null;
     }
 }

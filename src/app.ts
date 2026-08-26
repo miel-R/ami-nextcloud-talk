@@ -4,7 +4,8 @@ import { logger } from './logger';
 import { talkAgent } from './agent';
 import { sendTalkMessage } from './talk/client';
 import { verifyTalkSignature } from './talk/verify';
-import { renderMessageText, TalkWebhook } from './talk/types';
+import { downloadTalkImage } from './talk/files';
+import { extractImageFromContent, renderMessageText, TalkWebhook } from './talk/types';
 
 const app = express();
 
@@ -31,14 +32,12 @@ app.post(config.talkWebhookPath, async (req: Request & { rawBody?: Buffer }, res
 
     const hook = req.body as TalkWebhook;
 
-    // Only handle newly posted chat messages ("Create"); ignore reactions,
-    // join/leave notifications and anything without the expected structure.
-    if (!hook.object || !hook.target || !hook.actor) {
-        logger.info(`ℹ️ Ignored webhook without actor/object/target (type=${hook.type})`);
-        return;
-    }
-    if (hook.type !== 'Create') {
-        logger.info(`ℹ️ Ignored non-message event (type=${hook.type}, object.name=${hook.object.name})`);
+    // "Create" = regular chat message, "Activity" = file share posted to the room
+    const isMessageHook = hook.type === 'Create' || hook.type === 'Activity';
+    if (!isMessageHook || !hook.object || !hook.target || !hook.actor) {
+        if (hook.type !== 'Join' && hook.type !== 'Leave') {
+            logger.info(`ℹ️ Ignored webhook (type=${hook.type}, object.name=${hook.object?.name})`);
+        }
         return;
     }
 
@@ -51,27 +50,47 @@ app.post(config.talkWebhookPath, async (req: Request & { rawBody?: Buffer }, res
     // Skip messages authored by bots (including our own replies)
     if (hook.actor.type === 'Application' || hook.actor.id.startsWith('bots/')) return;
 
+    const roomToken = hook.target.id;
+    const actorId = hook.actor.id;
+    const actorName = hook.actor.name || undefined;
+    const messageId = hook.object.id;
+    const imageParam = extractImageFromContent(hook.object.content);
     let text = renderMessageText(hook.object.content);
-    if (!text) {
+    if (!text && !imageParam) {
         logger.warn(`⚠️ Could not render message text from content: ${String(hook.object.content).substring(0, 200)}`);
         return;
     }
 
-    // Optional mention gate: only answer when Ami is addressed (@Ami ...)
-    if (config.talkRequireMention && !/@ami\b/i.test(text)) return;
+    // Images ALWAYS require an @Ami mention — so random screenshots in the room
+    // don't trigger analysis; only messages explicitly addressed to Ami do.
+    const isMentioned = /@ami\b/i.test(text);
+    if (imageParam) {
+        if (!isMentioned) {
+            logger.info(`🖼️ Image "${imageParam.name}" from ${actorName || actorId} has no @Ami mention — ignoring.`);
+            return;
+        }
+        // Strip the mention so the AI sees the actual request/caption
+        text = text.replace(/@ami\b\s*/gi, '').trim();
+    } else {
+        // Text-only messages follow the configured mention gate
+        if (config.talkRequireMention && !isMentioned) return;
+        // Strip a leading @Ami mention so the AI sees the actual request
+        text = text.replace(/^@ami\s*/i, '').trim() || 'Hello!';
+    }
 
-    // Strip a leading @Ami mention so the AI sees the actual request
-    text = text.replace(/^@ami\s*/i, '').trim() || 'Hello!';
-
-    const roomToken = hook.target.id;
-    const actorId = hook.actor.id;
-    const actorName = hook.actor.name || undefined;
-
-    logger.info(`📨 Room ${roomToken} | ${actorName || actorId}: "${text}"`);
+    logger.info(`📨 Room ${roomToken} | ${actorName || actorId}: "${text.substring(0, 80)}"${imageParam ? ` 📸 [${imageParam.name}]` : ''}`);
 
     try {
-        const reply = await talkAgent.handleMessage(roomToken, actorId, actorName || '', text);
-        await sendTalkMessage(roomToken, reply);
+        let image;
+        if (imageParam) {
+            image = await downloadTalkImage(imageParam);
+            if (!image) {
+                await sendTalkMessage(roomToken, `⚠️ Sorry ${actorName || ''}, I couldn't download "${imageParam.name}" so I can't analyze it. Try re-sharing the image.`, messageId);
+                return;
+            }
+        }
+        const reply = await talkAgent.handleMessage(roomToken, actorId, actorName || '', text, image);
+        await sendTalkMessage(roomToken, reply, messageId);
     } catch (error) {
         logger.error('Error handling webhook:', error);
     }

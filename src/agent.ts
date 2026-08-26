@@ -1,4 +1,4 @@
-import { aiService, HistoryItem } from './ai.service';
+import { aiService, HistoryItem, ImageData } from './ai.service';
 import { config } from './config';
 import { logger } from './logger';
 
@@ -49,7 +49,7 @@ export class TalkAgent {
     }
 
     /** Returns the reply text for an incoming chat message from a Talk user. */
-    async handleMessage(roomToken: string, userId: string, userName: string, message: string): Promise<string> {
+    async handleMessage(roomToken: string, userId: string, userName: string, message: string, image?: ImageData): Promise<string> {
         const key = `${roomToken}:${userId}`;
 
         try {
@@ -84,13 +84,16 @@ export class TalkAgent {
             conv.lastActivity = Date.now();
 
             const history = conv.history.slice();
-            history.push({ role: 'user', content: message });
+            // Image messages go to the AI as a single turn (multi-turn history
+            // makes vision models lose the attached image)
+            const userText = message.trim() || (image ? 'Please analyze this image and describe what you see. If it looks like a technical problem (error dialog, broken device, crash), diagnose it like a help desk agent.' : '');
+            history.push({ role: 'user', content: userText });
 
             const systemPrompt = userName
                 ? `${MASTER_SYSTEM_PROMPT}\n\nYou are currently talking to ${userName}. Address them naturally when it helps.`
                 : MASTER_SYSTEM_PROMPT;
 
-            let response = await aiService.callAI(message, systemPrompt, history);
+            let response = await aiService.callAI(userText, systemPrompt, history, image);
 
             if (this.needsEscalation(response, message)) {
                 response = response.replace('[CREATE_TICKET]', '').trim();

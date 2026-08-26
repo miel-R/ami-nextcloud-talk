@@ -7,6 +7,12 @@ export interface HistoryItem {
     content: string;
 }
 
+export interface ImageData {
+    mimeType: string;
+    base64Data: string;
+    fileName?: string;
+}
+
 type Provider = 'gemini' | 'azure' | 'openai' | 'none';
 
 interface GeminiResponse {
@@ -55,17 +61,17 @@ class AIService {
         return this.activeProvider;
     }
 
-    async callAI(userMessage: string, systemPrompt: string, history?: HistoryItem[]): Promise<string> {
+    async callAI(userMessage: string, systemPrompt: string, history?: HistoryItem[], image?: ImageData): Promise<string> {
         if (this.activeProvider === 'none') {
             return '⚠️ No AI provider configured. Please set GEMINI_API_KEY or OPENAI_API_KEY.';
         }
         try {
             switch (this.activeProvider) {
                 case 'gemini':
-                    return await this.callGemini(userMessage, systemPrompt, history);
+                    return await this.callGemini(userMessage, systemPrompt, history, image);
                 case 'openai':
                 case 'azure':
-                    return await this.callChatCompletions(userMessage, systemPrompt, history);
+                    return await this.callChatCompletions(userMessage, systemPrompt, history, image);
                 default:
                     return '⚠️ No AI provider available.';
             }
@@ -75,13 +81,24 @@ class AIService {
         }
     }
 
-    private async callGemini(userMessage: string, systemPrompt: string, history?: HistoryItem[]): Promise<string> {
+    private async callGemini(userMessage: string, systemPrompt: string, history?: HistoryItem[], image?: ImageData): Promise<string> {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModelName}:generateContent?key=${config.geminiApiKey}`;
 
-        const contents = [
-            ...(history || []).map(item => ({ role: item.role, parts: [{ text: item.content }] })),
-            { role: 'user', parts: [{ text: userMessage || 'Help me.' }] }
-        ];
+        const contents: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }> =
+            (history || []).map(item => ({ role: item.role, parts: [{ text: item.content }] }));
+
+        if (image) {
+            // Multi-turn history makes the model lose attached images — collapse
+            // to a single turn containing the text prompt + the image.
+            contents.length = 0;
+            const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
+                { text: userMessage || 'Analyze this image and respond.' }
+            ];
+            parts.push({ inlineData: { mimeType: image.mimeType, data: image.base64Data } });
+            contents.push({ role: 'user', parts });
+        } else {
+            contents.push({ role: 'user', parts: [{ text: userMessage || 'Help me.' }] });
+        }
 
         const payload = {
             systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -94,16 +111,24 @@ class AIService {
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response.";
     }
 
-    private async callChatCompletions(userMessage: string, systemPrompt: string, history?: HistoryItem[]): Promise<string> {
+    private async callChatCompletions(userMessage: string, systemPrompt: string, history?: HistoryItem[], image?: ImageData): Promise<string> {
         if (!history || history.length === 0) {
-            // Keep the current message out of the history slice and send it directly
             history = [];
         }
         const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
         for (const item of history) {
             messages.push({ role: item.role === 'model' ? 'assistant' : 'user', content: item.content });
         }
-        if (!history || history.length === 0) {
+        if (image) {
+            // Vision message: text + image as a data URL in a content array
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: userMessage || 'Analyze this image and respond.' },
+                    { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.base64Data}` } }
+                ]
+            } as unknown as ChatMessage);
+        } else if (!history || history.length === 0) {
             messages.push({ role: 'user', content: userMessage });
         }
 

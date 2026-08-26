@@ -83,6 +83,7 @@ With no AI key configured, the bot runs but answers with a "no AI configured" no
 - Confidentiality guard blocks sensitive topics (sweldo/sahod, pricing, credentials…) before any AI call
 - Escalation detection: `[CREATE_TICKET]` intent or explicit "create ticket" requests get logged-for-the-team responses
 - Rate limiting per user, idle session cleanup, multi-turn history per user per room
+- 📸 **Image analysis**: share a picture with `@Ami` in the caption and she'll analyze it (Gemini vision / GPT-4o) — screenshots of errors get diagnosed like a help desk agent. Replies are posted **in-thread** via `replyTo`.
 
 ## Production notes
 

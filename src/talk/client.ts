@@ -13,8 +13,10 @@ import { logger } from '../logger';
  *   <X-Nextcloud-Talk-Bot-Random> + <the message text>
  * signed with the shared bot secret — NOT over the JSON body.
  * Talk matches our secret against the bots enabled in that room.
+ *
+ * @param replyTo optional message ID to reply in-thread to
  */
-export async function sendTalkMessage(roomToken: string, text: string): Promise<void> {
+export async function sendTalkMessage(roomToken: string, text: string, replyTo?: string): Promise<void> {
     if (!config.talkServerUrl) {
         logger.error('TALK_SERVER_URL is not configured — cannot send reply.');
         return;
@@ -25,7 +27,12 @@ export async function sendTalkMessage(roomToken: string, text: string): Promise<
     }
 
     const url = `${config.talkServerUrl}/ocs/v2.php/apps/spreed/api/v1/bot/${roomToken}/message`;
-    const body = JSON.stringify({ message: text });
+    const payload: Record<string, unknown> = { message: text };
+    if (replyTo) {
+        const id = parseInt(replyTo, 10);
+        if (!Number.isNaN(id)) payload.replyTo = id;
+    }
+    const body = JSON.stringify(payload);
 
     // Random must be at least 32 characters; signature covers random + message text
     const random = crypto.randomBytes(32).toString('hex');
@@ -42,7 +49,7 @@ export async function sendTalkMessage(roomToken: string, text: string): Promise<
             },
             timeout: 15000
         });
-        logger.info(`📤 Reply posted to room ${roomToken}: "${text.substring(0, 60)}..."`);
+        logger.info(`📤 Reply posted to room ${roomToken}${replyTo ? ` (reply to #${replyTo})` : ''}: "${text.substring(0, 60)}..."`);
     } catch (error: any) {
         logger.error(`❌ Failed to post reply to room ${roomToken}:`, error.response?.status, JSON.stringify(error.response?.data) || error.message);
     }

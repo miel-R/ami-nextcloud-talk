@@ -38,6 +38,10 @@ export const config = {
     // When true, Ami only answers messages that @mention her; otherwise she
     // answers every regular chat message in rooms where the bot is enabled.
     talkRequireMention: (process.env.TALK_REQUIRE_MENTION || 'false') === 'true',
+    // Optional Nextcloud user used to download shared images over WebDAV when
+    // the webhook carries no public share link. Must be a member of the room.
+    talkAdminUser: process.env.TALK_ADMIN_USER || '',
+    talkAdminPassword: process.env.SECRET_TALK_ADMIN_PASSWORD || '',
 
     // ── AI provider selection ──────────────────────────────────────────────────
     aiProvider: (process.env.AI_PROVIDER || 'auto') as 'gemini' | 'openai' | 'azure' | 'auto',
@@ -62,5 +66,8 @@ export const config = {
     rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10),
     maxRequestsPerWindow: parseInt(process.env.MAX_REQUESTS_PER_WINDOW || '10', 10),
     sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || '120000', 10),
-    maxHistoryTurns: parseInt(process.env.MAX_HISTORY_TURNS || '20', 10)
+    maxHistoryTurns: parseInt(process.env.MAX_HISTORY_TURNS || '20', 10),
+
+    // ── Image handling ─────────────────────────────────────────────────────────
+    maxImageSizeMB: parseInt(process.env.MAX_IMAGE_SIZE_MB || '10', 10)
 };
