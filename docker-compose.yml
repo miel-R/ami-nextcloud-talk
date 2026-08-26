@@ -1,0 +1,13 @@
+services:
+  ami-talk-bot:
+    build: .
+    container_name: ami-talk-bot
+    restart: unless-stopped
+    networks:
+      - nextcloud-aio
+    env_file: env/.env.dev.user
+
+# Attach to the network AIO created so Nextcloud can reach us by name
+networks:
+  nextcloud-aio:
+    external: true

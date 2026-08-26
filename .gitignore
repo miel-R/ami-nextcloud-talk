@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.dev
+env/
+*.log
+*.tsbuildinfo
+uploads/
+access-control.json
+alert-config.json
+.DS_Store
