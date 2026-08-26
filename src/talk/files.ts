@@ -57,19 +57,27 @@ async function downloadViaWebdav(file: FileParameter): Promise<ImageAttachment |
         logger.warn('⚠️ No file path available for WebDAV fallback.');
         return null;
     }
-    const cleanPath = file.path.replace(/^\/+/, '');
-    const url = `${config.talkServerUrl}/remote.php/dav/files/${encodeURIComponent(config.talkAdminUser)}/${cleanPath}`;
-    try {
-        const res = await axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 30000,
-            headers: { Authorization: basicAuth(config.talkAdminUser, config.talkAdminPassword) }
-        });
-        return toAttachment(file, res);
-    } catch (error: any) {
-        logger.warn(`⚠️ WebDAV download failed for "${file.name}": ${error.response?.status || error.message}`);
-        return null;
+
+    // Room shares mount the whole conversation-folder hierarchy into every
+    // member's storage, so the sharer's path usually resolves 1:1. Some setups
+    // mount flat instead — try that as a fallback.
+    const candidates = [file.path, `Talk/${file.name}`];
+
+    for (const candidate of candidates) {
+        // encodeURI preserves "/" separators while escaping spaces & special chars
+        const url = `${config.talkServerUrl}/remote.php/dav/files/${encodeURIComponent(config.talkAdminUser)}/${encodeURI(candidate.replace(/^\/+/, ''))}`;
+        try {
+            const res = await axios.get(url, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+                headers: { Authorization: basicAuth(config.talkAdminUser, config.talkAdminPassword) }
+            });
+            return toAttachment(file, res);
+        } catch (error: any) {
+            logger.warn(`⚠️ WebDAV download failed for "${candidate}": ${error.response?.status || error.message}`);
+        }
     }
+    return null;
 }
 
 function toAttachment(file: FileParameter, res: { headers: Record<string, unknown>; data: ArrayBuffer }): ImageAttachment | null {

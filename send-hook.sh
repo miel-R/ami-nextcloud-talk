@@ -1,16 +1,20 @@
 #!/bin/sh
 # Test helper: send a signed fake-Talk webhook to the bot (inside docker network)
-# usage: TALK_SECRET=<secret> sh send-hook.sh /tmp/hook.json [nextcloud-container]
+# usage: sh send-hook.sh <hook-json-file> [nextcloud-container]
+# The secret is read from TALK_SECRET env var (never hardcoded).
 secret="${TALK_SECRET:?Set TALK_SECRET env var (value from occ talk:bot:install)}"
+file="$1"
 container="${2:-nextcloud-aio-nextcloud}"
-random=$(openssl rand -hex 32)
-body=$(cat "$1")
-sig=$(printf '%s' "${random}${body}" | openssl dgst -sha256 -hmac "$secret")
-sig=${sig##* }
-docker cp "$1" "$container":/tmp/hook.json >/dev/null
-docker exec "$container" sh -c "random=$random; sig=$sig; curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+docker cp "$file" "$container":/tmp/hook.json >/dev/null || exit 1
+docker exec "$container" sh -c "
+secret='$secret'
+random=\$(openssl rand -hex 32)
+body=\$(cat /tmp/hook.json)
+sig=\$(printf '%s' \"\${random}\${body}\" | openssl dgst -sha256 -hmac \"\$secret\")
+sig=\${sig##* }
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'Content-Type: application/json' \
-  -H \"X-Nextcloud-Talk-Random: $random\" \
-  -H \"X-Nextcloud-Talk-Signature: $sig\" \
-  --data-binary @/tmp/hook.json \
+  -H \"X-Nextcloud-Talk-Random: \$random\" \
+  -H \"X-Nextcloud-Talk-Signature: \$sig\" \
+  --data-binary \"\$body\" \
   http://ami-talk-bot:3979/api/talk/webhook"
