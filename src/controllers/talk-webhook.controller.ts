@@ -11,7 +11,7 @@ import { ImageData } from '../models/message.model';
 import { sessionStore } from '../services/session.service';
 import { roomApprovalStore } from '../services/room-approval.service';
 import { notificationStore } from '../services/notification.service';
-import { enableBotInRoom } from '../services/talk/talk-client.service';
+import { enableBotInRoom, sendTalkMessageStatus } from '../services/talk/talk-client.service';
 import { ADMIN_COMMANDS, isAdminUser } from '../features/agent/commands';
 
 type WebhookRequest = express.Request & { rawBody?: Buffer };
@@ -115,16 +115,16 @@ export function registerTalkWebhook(app: express.Express): void {
                 await sendTalkMessage(roomToken, `📋 **Approved rooms:**\n${body}`, messageId);
                 return;
             }
-            if (text.startsWith('/notify-add ')) {
-                const tok = text.slice('/notify-add '.length).trim();
-                if (!tok) {
-                    await sendTalkMessage(roomToken, '⚠️ Usage: `/notify-add <roomToken>`', messageId);
-                    return;
-                }
-                const added = notificationStore.add(tok, roomName || tok, user.id);
-                let msg = added ? `🔔 Added notification room \`${tok}\`.` : `ℹ️ Room \`${tok}\` is already a notification target.`;
+            if (text === '/notify-add' || text.startsWith('/notify-add ')) {
+                const tok = text.slice('/notify-add'.length).trim();
+                const target = tok || roomToken;
+                const targetName = tok ? tok : (roomName || roomToken);
+                const added = notificationStore.add(target, targetName, user.id);
+                let msg = added
+                    ? `🔔 Added notification room \`${target}\`${tok ? '' : ' (this room)'}.`
+                    : `ℹ️ Room \`${target}\` is already a notification target.`;
                 try {
-                    await enableBotInRoom(tok, config.talkBotId);
+                    await enableBotInRoom(target, config.talkBotId);
                     msg += ' Ami has been enabled in that room.';
                 } catch (error: any) {
                     msg += ` ⚠️ Could not auto-enable Ami there (${error?.message || 'check admin creds / bot id'}); enable her manually.`;
@@ -132,10 +132,29 @@ export function registerTalkWebhook(app: express.Express): void {
                 await sendTalkMessage(roomToken, msg, messageId);
                 return;
             }
-            if (text.startsWith('/notify-remove ')) {
-                const tok = text.slice('/notify-remove '.length).trim();
-                const removed = notificationStore.remove(tok);
-                await sendTalkMessage(roomToken, removed ? `🔕 Removed notification room \`${tok}\`.` : `ℹ️ Room \`${tok}\` was not a notification target.`, messageId);
+            if (text === '/notify-remove' || text.startsWith('/notify-remove ')) {
+                const tok = text.slice('/notify-remove'.length).trim();
+                const target = tok || roomToken;
+                const removed = notificationStore.remove(target);
+                await sendTalkMessage(roomToken, removed ? `🔕 Removed notification room \`${target}\`.` : `ℹ️ Room \`${target}\` was not a notification target.`, messageId);
+                return;
+            }
+            if (text === '/notify-test') {
+                const rs = notificationStore.list();
+                if (!rs.length) {
+                    await sendTalkMessage(roomToken, 'ℹ️ No notification rooms configured — add one with `/notify-add` first.', messageId);
+                    return;
+                }
+                let okCount = 0;
+                const failed: string[] = [];
+                for (const r of rs) {
+                    const res = await sendTalkMessageStatus(r.token, '✅ Ami escalation test — this Help Desk group is reachable and will receive tickets.');
+                    if (res.ok) okCount++; else failed.push(r.token);
+                }
+                let msg = `🧪 **Escalation test:** delivered to ${okCount}/${rs.length} group(s).`;
+                if (failed.length) msg += `\n⚠️ Not reachable: ${failed.map(t => '`' + t + '`').join(', ')}`;
+                else msg += ' All good. 🎉';
+                await sendTalkMessage(roomToken, msg, messageId);
                 return;
             }
             if (text === '/notify-list') {

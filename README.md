@@ -79,9 +79,10 @@ work even in a room Ami would otherwise ignore:
 | `/approve` | Approve **this** room so Ami answers here |
 | `/revoke` | Revoke **this** room's approval |
 | `/list` | List every approved room |
-| `/notify-add <token>` | Add a group chat that receives escalation tickets (auto-enables Ami there) |
-| `/notify-remove <token>` | Remove a group chat from escalation notifications |
+| `/notify-add [<token>]` | Add a group chat that receives escalation tickets — with **no token it adds the room you're in** (auto-enables Ami there) |
+| `/notify-remove [<token>]` | Remove a group chat from escalation notifications (no token = current room) |
 | `/notify-list` | List the group chats that receive escalation tickets |
+| `/notify-test` | Send a test ticket to every configured notification group and report what reached |
 
 ## Room approval gate
 
@@ -109,12 +110,20 @@ intake and files a ticket:
 The ticket is posted as Ami into every configured notification group chat. To
 configure those groups (admin only):
 
-- `@Ami /notify-add <roomToken>` — add a group chat; Ami is auto-enabled there
-  so she can post the ticket. (The "Ami Help Desk" group is a good target —
+- `@Ami /notify-add` — run this **inside** the target group chat (e.g. the
+  "Ami Help Desk" group); it adds that room and auto-enables Ami there so she
+  can post tickets. You can also pass a token to add a different room remotely:
+  `@Ami /notify-add <roomToken>`. (The "Ami Help Desk" group is a good target —
   with chat disabled for humans, only Ami can post, so it's a clean notification sink.)
-- `@Ami /notify-remove <roomToken>` / `@Ami /notify-list`
+- `@Ami /notify-remove` (current room) or `@Ami /notify-remove <roomToken>` / `@Ami /notify-list`
+- `@Ami /notify-test` — posts a test message into every configured group and
+  tells you how many were reached and which (if any) failed.
 
 Notification targets persist in `data/notify-rooms.json` (same volume).
+
+> The bot must already be enabled in a room for its webhook (and thus the
+> command) to arrive there — so for the no-token form, first enable Ami in the
+> group once (conversation settings → Bots → Ami), then run `/notify-add`.
 
 ### Departments / categories / system types
 

@@ -12,15 +12,16 @@ export function isEndCommand(message: string): boolean {
 export const USER_COMMANDS = ['/help', '/status', '/whoami', '/reset', '/end'];
 
 /** Commands only the Nextcloud admin account may run. */
-export const ADMIN_COMMANDS = ['/approve', '/revoke', '/list', '/notify-add', '/notify-remove', '/notify-list'];
+export const ADMIN_COMMANDS = ['/approve', '/revoke', '/list', '/notify-add', '/notify-remove', '/notify-list', '/notify-test'];
 
 const ADMIN_COMMAND_DESCRIPTIONS: Record<string, string> = {
     '/approve': 'Approve this room so Ami answers here',
     '/revoke': 'Revoke this room\'s approval',
     '/list': 'List every approved room',
-    '/notify-add': 'Add a group chat (token) to receive escalation tickets',
-    '/notify-remove': 'Remove a group chat from escalation notifications',
-    '/notify-list': 'List group chats that receive escalation tickets'
+    '/notify-add': 'Add THIS room (or a <token>) to receive escalation tickets',
+    '/notify-remove': 'Remove THIS room (or a <token>) from escalation notifications',
+    '/notify-list': 'List group chats that receive escalation tickets',
+    '/notify-test': 'Send a test ticket to all configured notification groups'
 };
 
 /**

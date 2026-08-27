@@ -17,13 +17,32 @@ import { logger } from '../../core/logger';
  * @param replyTo optional message ID to reply in-thread to
  */
 export async function sendTalkMessage(roomToken: string, text: string, replyTo?: string): Promise<void> {
+    await postBotMessage(roomToken, text, replyTo);
+}
+
+/** Result of a bot message post, so callers can tell success from failure. */
+export interface PostResult {
+    ok: boolean;
+    status?: number;
+    error?: string;
+}
+
+/**
+ * Posts a bot message and returns whether it succeeded (with the HTTP status on
+ * failure) instead of swallowing the error like `sendTalkMessage` does.
+ */
+export async function sendTalkMessageStatus(roomToken: string, text: string, replyTo?: string): Promise<PostResult> {
+    return postBotMessage(roomToken, text, replyTo);
+}
+
+async function postBotMessage(roomToken: string, text: string, replyTo?: string): Promise<PostResult> {
     if (!config.talkServerUrl) {
         logger.error('TALK_SERVER_URL is not configured — cannot send reply.');
-        return;
+        return { ok: false, error: 'TALK_SERVER_URL not configured' };
     }
     if (!config.talkSecret) {
         logger.error('TALK_SECRET is not configured — cannot sign the reply request.');
-        return;
+        return { ok: false, error: 'TALK_SECRET not configured' };
     }
 
     const url = `${config.talkServerUrl}/ocs/v2.php/apps/spreed/api/v1/bot/${roomToken}/message`;
@@ -50,8 +69,12 @@ export async function sendTalkMessage(roomToken: string, text: string, replyTo?:
             timeout: 15000
         });
         logger.info(`📤 Reply posted to room ${roomToken}${replyTo ? ` (reply to #${replyTo})` : ''}: "${text.substring(0, 60)}..."`);
+        return { ok: true };
     } catch (error: any) {
-        logger.error(`❌ Failed to post reply to room ${roomToken}:`, error.response?.status, JSON.stringify(error.response?.data) || error.message);
+        const status = error?.response?.status;
+        const detail = JSON.stringify(error.response?.data) || error.message;
+        logger.error(`❌ Failed to post reply to room ${roomToken}:`, status, detail);
+        return { ok: false, status, error: detail };
     }
 }
 
