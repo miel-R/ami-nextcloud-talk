@@ -4,6 +4,7 @@ import { logger } from './core/logger';
 import { sessionStore } from './services/session.service';
 import { sendTalkMessage } from './services/talk/talk-client.service';
 import { buildFarewell } from './features/agent/prompt';
+import { startNudgeScheduler } from './services/nudge.service';
 
 if (!config.talkServerUrl || !config.talkSecret) {
     logger.warn('⚠️ TALK_SERVER_URL / TALK_SECRET not fully configured — the bot will run but cannot sign replies until you register it in Nextcloud (see README).');
@@ -18,6 +19,8 @@ sessionStore.setExpireHandler(async (session) => {
         logger.error('Failed to post session farewell:', error);
     }
 });
+
+startNudgeScheduler();
 
 const server = app.listen(config.port, () => {
     logger.success(`🚀 ${config.companyName} Help Desk — Ami for Nextcloud Talk`);

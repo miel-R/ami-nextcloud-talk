@@ -35,9 +35,10 @@ export const config = {
     // webhook signatures and to sign outbound replies.
     talkSecret: process.env.TALK_SECRET || process.env.SECRET_TALK_SECRET || '',
     talkWebhookPath: process.env.TALK_WEBHOOK_PATH || '/api/talk/webhook',
-    // When true, Ami only answers messages that @mention her; otherwise she
-    // answers every regular chat message in rooms where the bot is enabled.
-    talkRequireMention: (process.env.TALK_REQUIRE_MENTION || 'false') === 'true',
+    // When true (recommended), Ami only answers messages that mention her by
+    // name — the word "ami" anywhere in the text (e.g. "ami help", "hello ami").
+    // When false she answers every regular chat message in approved rooms.
+    talkRequireMention: (process.env.TALK_REQUIRE_MENTION || 'true') === 'true',
     // Optional Nextcloud user used to download shared images over WebDAV when
     // the webhook carries no public share link. Must be a member of the room.
     talkAdminUser: process.env.TALK_ADMIN_USER || '',
@@ -45,6 +46,13 @@ export const config = {
     // Numeric bot id printed by `occ talk:bot:install`; used to auto-enable
     // Ami in notification rooms added via $notify-add.
     talkBotId: process.env.TALK_BOT_ID || '1',
+
+    // Hourly nudge: Ami reminds approved rooms how to reach her. Set
+    // TALK_NUDGE_INTERVAL_MIN=0 to disable. The reminder text is TALK_NUDGE_MESSAGE.
+    // Notification rooms (added via $notify-add) are skipped automatically.
+    talkNudgeIntervalMin: parseInt(process.env.TALK_NUDGE_INTERVAL_MIN || '60', 10) || 0,
+    talkNudgeMessage: process.env.TALK_NUDGE_MESSAGE ||
+        '💡 Need IT help or want to report an issue? Just type **ami** in this chat (e.g. "ami assist" or "ami help") and I\'ll jump in.',
 
     // ── AI provider selection ──────────────────────────────────────────────────
     aiProvider: (process.env.AI_PROVIDER || 'auto') as 'gemini' | 'openai' | 'azure' | 'auto',

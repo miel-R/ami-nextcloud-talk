@@ -2,7 +2,7 @@ import express from 'express';
 import { config } from '../config/config.service';
 import { logger } from '../core/logger';
 import { talkAgent } from '../services/talk.service';
-import { sendTalkMessage } from '../services/talk/talk-client.service';
+import { sendTalkMessage, isAdminModeratorInRoom } from '../services/talk/talk-client.service';
 import { verifyTalkSignature } from '../services/talk/talk-verify.service';
 import { downloadTalkImage } from '../services/talk/talk-files.service';
 import { extractImageFromContent, renderMessageText, TalkWebhook } from '../models/webhook.model';
@@ -30,10 +30,42 @@ export function registerTalkWebhook(app: express.Express): void {
 
         // "Create" = regular chat message, "Activity" = file share posted to the room
         const isMessageHook = hook.type === 'Create' || hook.type === 'Activity';
-        if (!isMessageHook || !hook.object || !hook.target || !hook.actor) {
-            if (hook.type !== 'Join' && hook.type !== 'Leave') {
-                logger.info(`ℹ️ Ignored webhook (type=${hook.type}, object.name=${hook.object?.name})`);
+        // Bot enabled/disabled in a conversation arrives as a Join/Leave webhook
+        // where the *actor* is the bot itself (actor.type=Application, id=bots/…).
+        // The room token/name are in object.id / object.name (target is undefined).
+        // We auto-approve on enable so a freshly created/enabled group chat answers
+        // immediately, and auto-revoke on disable to keep the store clean.
+        if ((hook.type === 'Join' || hook.type === 'Leave') && hook.actor && hook.actor.type === 'Application') {
+            const roomToken = hook.object?.id;
+            const roomName = hook.object?.name || roomToken || '';
+            if (roomToken) {
+                if (hook.type === 'Join') {
+                    let adminOwned = false;
+                    try {
+                        adminOwned = await isAdminModeratorInRoom(roomToken);
+                    } catch {
+                        adminOwned = false;
+                    }
+                    if (adminOwned) {
+                        const newlyApproved = roomApprovalStore.approve(roomToken, roomName, hook.actor.id);
+                        logger.info(`🤖 Bot enabled in ${roomToken} (${roomName}) — admin-owned, auto-approved.`);
+                        if (newlyApproved) {
+                            await sendTalkMessage(roomToken, '👋 **Ami chatbot enabled!** I\'m your help desk assistant. Type `$help` to see what I can do.');
+                        }
+                    } else {
+                        logger.info(`🤖 Bot enabled in ${roomToken} (${roomName}) by a non-admin — sending authorization notice (not auto-approved).`);
+                        await sendTalkMessage(roomToken, '🔔 **Ami was enabled in this chat.** To let her answer here, a Nextcloud admin must authorize it — ask an admin to join this conversation and send `ami $approve`. Until then I won\'t respond to messages.');
+                    }
+                } else {
+                    roomApprovalStore.revoke(roomToken);
+                    logger.info(`🤖 Bot disabled in ${roomToken} (${roomName}) — auto-revoked.`);
+                }
             }
+            return;
+        }
+
+        if (!isMessageHook || !hook.object || !hook.target || !hook.actor) {
+            logger.info(`ℹ️ Ignored webhook (type=${hook.type}, object.name=${hook.object?.name})`);
             return;
         }
 
@@ -58,25 +90,25 @@ export function registerTalkWebhook(app: express.Express): void {
         }
 
         // A mention is only required to START a session. Once a session is active
-        // for this room + user, the user no longer needs to @Ami — matching a
+        // for this room + user, the user no longer needs to say "ami" — matching a
         // natural "talk to Ami" conversation — until it idles out or is ended.
         const sessionActive = sessionStore.has(roomToken, actorId);
-        const isMentioned = /@ami\b/i.test(text);
+        const isMentioned = /\bami\b/i.test(text);
 
         if (imageParam) {
-            // Before a session exists, an image still needs an @Ami mention so
+            // Before a session exists, an image still needs an "ami" mention so
             // random screenshots don't trigger analysis. Once armed, it doesn't.
             if (!isMentioned && !sessionActive) {
-                logger.info(`🖼️ Image "${imageParam.name}" from ${hook.actor.name || actorId} has no @Ami mention and no active session — ignoring.`);
+                logger.info(`🖼️ Image "${imageParam.name}" from ${hook.actor.name || actorId} has no "ami" mention and no active session — ignoring.`);
                 return;
             }
             // Strip the mention so the AI sees the actual request/caption
-            text = text.replace(/@ami\b\s*/gi, '').trim();
+            text = text.replace(/\bami\b/gi, '').trim();
         } else {
-            // Text: require @Ami only when there's no active session AND the global gate is on
+            // Text: require "ami" only when there's no active session AND the global gate is on
             if (config.talkRequireMention && !sessionActive && !isMentioned) return;
-            // Strip a leading @Ami mention so the AI sees the actual request
-            text = text.replace(/^@ami\s*/i, '').trim() || 'Hello!';
+            // Strip a leading "ami" mention so the AI sees the actual request
+            text = text.replace(/\bami\b/gi, '').trim() || 'Hello!';
         }
 
         const user = fromActor(hook.actor);

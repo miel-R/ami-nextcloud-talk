@@ -137,7 +137,7 @@ Registering with only `response` produces a bot that can reply but never hears a
 
 - File shares arrive as webhooks with `type: "Activity"` (not `"Create"`), `object.name: "message"`, and the file details in `object.content` → `parameters.file` (name, mimetype, size, path, link).
 - Download strategy: public share link (`/s/<token>/download`) when present; otherwise **WebDAV fallback** using `TALK_ADMIN_USER` (room shares mount flat under `<admin>/Talk/<filename>`).
-- Images are analyzed **only when the share mentions @Ami**; the reply is posted **in-thread** (`replyTo`) to the share message.
+- Images are analyzed **only when the share mentions ami**; the reply is posted **in-thread** (`replyTo`) to the share message.
 
 ### 3.4 Register the bot (server side)
 
@@ -216,9 +216,9 @@ Create `env/.env.dev.user` (git-ignored) from `.env.example` and fill in:
 | `SECRET_GEMINI_API_KEY` *or* `SECRET_OPENAI_API_KEY` *or* `AZURE_OPENAI_*` | ✅ | Pick one provider; `AI_PROVIDER=auto` detects which |
 | `PORT` | – | Defaults to `3979` |
 | `COMPANY_NAME` | – | Shown in greetings/help |
-| `TALK_REQUIRE_MENTION` | – | `true` = only answer when @Ami is mentioned; default `false` |
+| `TALK_REQUIRE_MENTION` | – | `true` = only answer when the word **ami** is mentioned (the `@` is optional); default `true` |
 | `TALK_ADMIN_USER` / `SECRET_TALK_ADMIN_PASSWORD` | – | Nextcloud user for the **image-download WebDAV fallback**; must be a member of the room. Leave empty to rely on public share links only |
-| `MAX_IMAGE_SIZE_MB` | – | Max image size Ami downloads & analyzes (default `10`). Images **always** require an @Ami mention regardless of `TALK_REQUIRE_MENTION` |
+| `MAX_IMAGE_SIZE_MB` | – | Max image size Ami downloads & analyzes (default `10`). Images **always** require an **ami** mention regardless of `TALK_REQUIRE_MENTION` |
 | `SENSITIVE_TOPICS` | – | Extra blocked phrases, comma-separated |
 | `SESSION_TIMEOUT`, `MAX_HISTORY_TURNS`, `RATE_LIMIT_WINDOW`, `MAX_REQUESTS_PER_WINDOW` | – | Conversation tuning; see `.env.example` |
 

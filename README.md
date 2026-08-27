@@ -86,16 +86,25 @@ work even in a room Ami would otherwise ignore:
 
 ## Room approval gate
 
-Ami stays silent in a room until the Nextcloud admin approves it:
+Ami only answers in rooms she is approved for. Because Talk's bot-enabled webhook
+does **not** say *who* enabled the bot, Ami decides based on room ownership:
 
-1. Enable the bot in the room (room owner → conversation settings → Bots → Ami).
-2. The admin sends `@Ami $approve` in that room.
-3. Ami replies `✅ Room approved` and starts answering.
+- **Admin-owned room** (the Nextcloud admin is an owner/moderator): enabling the
+  bot **auto-approves** the room, and Ami greets with `👋 Ami chatbot enabled!`.
+- **Non-admin room** (a regular user enabled the bot): Ami posts a **one-time**
+  notice — *"Ami was enabled in this chat. To let her answer here, a Nextcloud
+  admin must authorize it — ask an admin to join and send `ami $approve`."* She
+  then stays silent until an admin runs `ami $approve`.
 
-Until then, every message in the room (including `@Ami` mentions) is ignored.
+The admin can always manage approvals manually:
+- `ami $approve` — approve the current room (e.g. after the one-time notice).
+- `ami $revoke` — stop Ami from answering here (she stays enabled but silent).
+- `ami $list` — show all approved rooms.
+
+A message is only ignored when the room is **not** approved (e.g. after `$revoke`)
+or when it doesn't mention **ami** and no active session exists (see below).
 Approvals are stored in `data/approved-rooms.json` and persist across container
-rebuilds via the `ami-data` Docker volume. The admin can revoke a room with
-`@Ami $revoke` or see all approved rooms with `@Ami $list`.
+rebuilds via the `ami-data` Docker volume.
 
 ## Escalation to the Help Desk
 
@@ -147,9 +156,11 @@ Loaded from `.env` then `env/.env.dev.user` (secrets override). See `.env.exampl
 | `TALK_SERVER_URL` | Your Nextcloud base URL (no trailing slash) | — |
 | `SECRET_TALK_SECRET` | Secret from `talk:bot:install` | — |
 | `TALK_WEBHOOK_PATH` | Webhook route | `/api/talk/webhook` |
-| `TALK_REQUIRE_MENTION` | Require `@Ami` to **start** a conversation; once a session is active, no mention is needed until it expires or ends | `false` |
+| `TALK_REQUIRE_MENTION` | Require the word **ami** (the `@` is optional, it can appear anywhere, e.g. "ami help" or "hello ami") to **start** a conversation; once a session is active, no mention is needed until it expires or ends | `true` |
 | `TALK_ADMIN_USER` | Nextcloud account treated as the bot admin (WebDAV image downloads + all admin commands) | — |
 | `TALK_BOT_ID` | Numeric bot id printed by `talk:bot:install`; used to auto-enable Ami in `$notify-add` rooms | `1` |
+| `TALK_NUDGE_INTERVAL_MIN` | Minutes between the "need help?" nudges Ami posts into approved rooms (notification rooms added via `$notify-add` are skipped); `0` disables | `60` |
+| `TALK_NUDGE_MESSAGE` | Text of that nudge (posted as Ami into every approved, non-notification room) | _(see `config.service.ts` default)_ |
 | `AI_PROVIDER` | `auto` \| `gemini` \| `openai` \| `azure` | `auto` |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `AZURE_*` | AI keys | — |
 | `SENSITIVE_TOPICS` | Extra blocked phrases | built-in list |
@@ -204,10 +215,11 @@ Ami now tracks **who** she is talking to, not just the raw message:
 
 - Each conversation is a `Session` scoped per **room + user** (`User` parsed from the
   webhook `actor`: clean `id` with the `users/` prefix stripped, plus `displayName`).
-- **Mention-to-start:** when `TALK_REQUIRE_MENTION` is on, the *first* `@Ami` mention
-  opens the session; after that the user no longer needs to `@Ami` for the rest of the
-   conversation — until it idles out (`SESSION_TIMEOUT`) or is ended (`$end`/`$reset`).
-  A message with no `@Ami` and no active session is simply ignored.
+- **Mention-to-start:** when `TALK_REQUIRE_MENTION` is on, the *first* message that
+  contains the word **ami** (the `@` is optional) opens the session; after that the user
+  no longer needs to say **ami** for the rest of the conversation — until it idles out
+  (`SESSION_TIMEOUT`) or is ended (`$end`/`$reset`). A message with no **ami** and no
+  active session is simply ignored.
 - On the first message of a conversation she opens with a short **greeting that uses
   your name** (e.g. "Hi Maria! 👋"), and the system prompt always names the user so
   replies stay personal.
@@ -225,7 +237,7 @@ Ami now tracks **who** she is talking to, not just the raw message:
 - Escalation: when she can't resolve an issue she emits `[CREATE_TICKET]` and runs a guided **Department → Category → System → Problem** intake (menus from `ticket-categories.json`), then files the ticket into the configured Help Desk group(s) — see **Escalation to the Help Desk**
 - Knows exactly who she's talking to: greets by name on a fresh conversation, personalizes replies via the system prompt, and `$status` reports the user + room (see **User sessions & identity** above)
 - Rate limiting per user, idle session cleanup, multi-turn history per user per room
-- 📸 **Image analysis**: share a picture with `@Ami` in the caption and she'll analyze it (Gemini vision / GPT-4o) — screenshots of errors get diagnosed like a help desk agent. Replies are posted **in-thread** via `replyTo`.
+- 📸 **Image analysis**: share a picture with **ami** in the caption and she'll analyze it (Gemini vision / GPT-4o) — screenshots of errors get diagnosed like a help desk agent. Replies are posted **in-thread** via `replyTo`.
 
 ## Production notes
 

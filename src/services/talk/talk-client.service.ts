@@ -103,3 +103,33 @@ export async function enableBotInRoom(roomToken: string, botId: string): Promise
         throw error;
     }
 }
+
+/**
+ * Returns true when the configured admin account is an **owner or moderator** of
+ * the given room. Used to decide whether enabling the bot auto-approves the room
+ * (admin-managed) or only posts a "ask an admin to authorize" notice (a normal
+ * user enabled it). Talks' bot-enabled webhook does not tell us who enabled the
+ * bot, so we look the room's participants up with the admin account.
+ *
+ * If the call fails (e.g. the admin isn't a participant yet) we return false,
+ * which safely falls back to requiring manual `$approve`.
+ */
+export async function isAdminModeratorInRoom(roomToken: string): Promise<boolean> {
+    if (!config.talkServerUrl || !config.talkAdminUser || !config.talkAdminPassword) return false;
+    const url = `${config.talkServerUrl}/ocs/v2.php/apps/spreed/api/v4/room/${roomToken}/participants`;
+    try {
+        const res = await axios.get(url, {
+            auth: { username: config.talkAdminUser, password: config.talkAdminPassword },
+            headers: { 'OCS-APIRequest': 'true', 'Accept': 'application/json' },
+            timeout: 15000
+        });
+        const participants: any[] = res.data?.ocs?.data || [];
+        const adminActor = `users/${config.talkAdminUser}`;
+        return participants.some(
+            (p) => p.actorId === adminActor && (p.participantType === 1 || p.participantType === 2)
+        );
+    } catch (error: any) {
+        logger.warn(`⚠️ Could not read participants of ${roomToken} (${error?.response?.status || error.message}) — treating as not admin-owned.`);
+        return false;
+    }
+}
