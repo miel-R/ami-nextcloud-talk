@@ -139,7 +139,8 @@ Loaded from `.env` then `env/.env.dev.user` (secrets override). See `.env.exampl
 | `SECRET_TALK_SECRET` | Secret from `talk:bot:install` | — |
 | `TALK_WEBHOOK_PATH` | Webhook route | `/api/talk/webhook` |
 | `TALK_REQUIRE_MENTION` | Require `@Ami` to **start** a conversation; once a session is active, no mention is needed until it expires or ends | `false` |
-| `TALK_ADMIN_USER` | Nextcloud account treated as the bot admin (WebDAV image downloads + `/approve`, `/revoke`, `/list`) | — |
+| `TALK_ADMIN_USER` | Nextcloud account treated as the bot admin (WebDAV image downloads + all admin commands) | — |
+| `TALK_BOT_ID` | Numeric bot id printed by `talk:bot:install`; used to auto-enable Ami in `/notify-add` rooms | `1` |
 | `AI_PROVIDER` | `auto` \| `gemini` \| `openai` \| `azure` | `auto` |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `AZURE_*` | AI keys | — |
 | `SENSITIVE_TOPICS` | Extra blocked phrases | built-in list |
@@ -212,7 +213,7 @@ Ami now tracks **who** she is talking to, not just the raw message:
 - Master system prompt: warm, empathetic help desk agent for Amertron
 - Language mirroring: casual everyday Taglish for Tagalog speakers, natural English otherwise — never switching mid-conversation
 - Confidentiality guard blocks sensitive topics (sweldo/sahod, pricing, credentials…) before any AI call
-- Escalation detection: `[CREATE_TICKET]` intent or explicit "create ticket" requests get logged-for-the-team responses
+- Escalation: when she can't resolve an issue she emits `[CREATE_TICKET]` and runs a guided **Department → Category → System → Problem** intake (menus from `ticket-categories.json`), then files the ticket into the configured Help Desk group(s) — see **Escalation to the Help Desk**
 - Knows exactly who she's talking to: greets by name on a fresh conversation, personalizes replies via the system prompt, and `/status` reports the user + room (see **User sessions & identity** above)
 - Rate limiting per user, idle session cleanup, multi-turn history per user per room
 - 📸 **Image analysis**: share a picture with `@Ami` in the caption and she'll analyze it (Gemini vision / GPT-4o) — screenshots of errors get diagnosed like a help desk agent. Replies are posted **in-thread** via `replyTo`.
