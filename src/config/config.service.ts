@@ -43,7 +43,7 @@ export const config = {
     talkAdminUser: process.env.TALK_ADMIN_USER || '',
     talkAdminPassword: process.env.SECRET_TALK_ADMIN_PASSWORD || '',
     // Numeric bot id printed by `occ talk:bot:install`; used to auto-enable
-    // Ami in notification rooms added via /notify-add.
+    // Ami in notification rooms added via $notify-add.
     talkBotId: process.env.TALK_BOT_ID || '1',
 
     // ── AI provider selection ──────────────────────────────────────────────────

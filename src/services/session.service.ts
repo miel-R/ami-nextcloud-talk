@@ -75,13 +75,13 @@ export class SessionStore {
         this.sessions.clear();
     }
 
-    /** Human-readable summary of a session for the /status command. */
+    /** Human-readable summary of a session for the $status command. */
     describe(key: string): string {
         const session = this.sessions.get(key);
         if (!session) return '✅ No active conversation. Ask me anything!';
         const who = session.user.displayName ? `**${session.user.displayName}** (${session.user.id})` : `**${session.user.id}**`;
         const where = session.roomName ? `**${session.roomName}**` : `\`${session.roomToken}\``;
-        return `💬 Talking to ${who} in room ${where}. We've exchanged **${session.history.length}** messages so far. Type /reset to start fresh.`;
+        return `💬 Talking to ${who} in room ${where}. We've exchanged **${session.history.length}** messages so far. Type $reset to start fresh.`;
     }
 
     private cleanupIdle(): void {

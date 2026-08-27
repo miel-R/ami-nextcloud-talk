@@ -57,7 +57,7 @@ header `OCS-APIRequest: true` → `201 Created`. The room owner must be a **mode
 `occ talk:room:create --user admin` adds admin as a plain participant, so run
 `occ talk:room:promote {token} admin` first, or the enable call returns `403`.)
 
-Then just chat — or type `/help`.
+Then just chat — or type `$help`.
 
 ## Commands
 
@@ -65,37 +65,37 @@ User commands (work in any approved room):
 
 | Command | What it does |
 |---|---|
-| `/help` | Show the help message (admins also see admin commands) |
-| `/status` | Show who Ami is talking to (user + room) and the conversation state |
-| `/whoami` | Show the account Ami recognises you as |
-| `/reset` | Clear conversation history |
-| `/end` (`/exit`, `/quit`) | End the conversation |
+| `$help` | Show the help message (admins also see admin commands) |
+| `$status` | Show who Ami is talking to (user + room) and the conversation state |
+| `$whoami` | Show the account Ami recognises you as |
+| `$reset` | Clear conversation history |
+| `$end` (`$exit`, `$quit`) | End the conversation |
 
 Admin commands — only the account in `TALK_ADMIN_USER` may run these, and they
 work even in a room Ami would otherwise ignore:
 
 | Command | What it does |
 |---|---|
-| `/approve` | Approve **this** room so Ami answers here |
-| `/revoke` | Revoke **this** room's approval |
-| `/list` | List every approved room |
-| `/notify-add [<token>]` | Add a group chat that receives escalation tickets — with **no token it adds the room you're in** (auto-enables Ami there) |
-| `/notify-remove [<token>]` | Remove a group chat from escalation notifications (no token = current room) |
-| `/notify-list` | List the group chats that receive escalation tickets |
-| `/notify-test` | Send a test ticket to every configured notification group and report what reached |
+| `$approve` | Approve **this** room so Ami answers here |
+| `$revoke` | Revoke **this** room's approval |
+| `$list` | List every approved room |
+| `$notify-add [<token>]` | Add a group chat that receives escalation tickets — with **no token it adds the room you're in** (auto-enables Ami there) |
+| `$notify-remove [<token>]` | Remove a group chat from escalation notifications (no token = current room) |
+| `$notify-list` | List the group chats that receive escalation tickets |
+| `$notify-test` | Send a test ticket to every configured notification group and report what reached |
 
 ## Room approval gate
 
 Ami stays silent in a room until the Nextcloud admin approves it:
 
 1. Enable the bot in the room (room owner → conversation settings → Bots → Ami).
-2. The admin sends `@Ami /approve` in that room.
+2. The admin sends `@Ami $approve` in that room.
 3. Ami replies `✅ Room approved` and starts answering.
 
 Until then, every message in the room (including `@Ami` mentions) is ignored.
 Approvals are stored in `data/approved-rooms.json` and persist across container
 rebuilds via the `ami-data` Docker volume. The admin can revoke a room with
-`@Ami /revoke` or see all approved rooms with `@Ami /list`.
+`@Ami $revoke` or see all approved rooms with `@Ami $list`.
 
 ## Escalation to the Help Desk
 
@@ -110,20 +110,20 @@ intake and files a ticket:
 The ticket is posted as Ami into every configured notification group chat. To
 configure those groups (admin only):
 
-- `@Ami /notify-add` — run this **inside** the target group chat (e.g. the
+- `@Ami $notify-add` — run this **inside** the target group chat (e.g. the
   "Ami Help Desk" group); it adds that room and auto-enables Ami there so she
   can post tickets. You can also pass a token to add a different room remotely:
-  `@Ami /notify-add <roomToken>`. (The "Ami Help Desk" group is a good target —
+  `@Ami $notify-add <roomToken>`. (The "Ami Help Desk" group is a good target —
   with chat disabled for humans, only Ami can post, so it's a clean notification sink.)
-- `@Ami /notify-remove` (current room) or `@Ami /notify-remove <roomToken>` / `@Ami /notify-list`
-- `@Ami /notify-test` — posts a test message into every configured group and
+- `@Ami $notify-remove` (current room) or `@Ami $notify-remove <roomToken>` / `@Ami $notify-list`
+- `@Ami $notify-test` — posts a test message into every configured group and
   tells you how many were reached and which (if any) failed.
 
 Notification targets persist in `data/notify-rooms.json` (same volume).
 
 > The bot must already be enabled in a room for its webhook (and thus the
 > command) to arrive there — so for the no-token form, first enable Ami in the
-> group once (conversation settings → Bots → Ami), then run `/notify-add`.
+> group once (conversation settings → Bots → Ami), then run `$notify-add`.
 
 ### Departments / categories / system types
 
@@ -149,7 +149,7 @@ Loaded from `.env` then `env/.env.dev.user` (secrets override). See `.env.exampl
 | `TALK_WEBHOOK_PATH` | Webhook route | `/api/talk/webhook` |
 | `TALK_REQUIRE_MENTION` | Require `@Ami` to **start** a conversation; once a session is active, no mention is needed until it expires or ends | `false` |
 | `TALK_ADMIN_USER` | Nextcloud account treated as the bot admin (WebDAV image downloads + all admin commands) | — |
-| `TALK_BOT_ID` | Numeric bot id printed by `talk:bot:install`; used to auto-enable Ami in `/notify-add` rooms | `1` |
+| `TALK_BOT_ID` | Numeric bot id printed by `talk:bot:install`; used to auto-enable Ami in `$notify-add` rooms | `1` |
 | `AI_PROVIDER` | `auto` \| `gemini` \| `openai` \| `azure` | `auto` |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `AZURE_*` | AI keys | — |
 | `SENSITIVE_TOPICS` | Extra blocked phrases | built-in list |
@@ -206,12 +206,12 @@ Ami now tracks **who** she is talking to, not just the raw message:
   webhook `actor`: clean `id` with the `users/` prefix stripped, plus `displayName`).
 - **Mention-to-start:** when `TALK_REQUIRE_MENTION` is on, the *first* `@Ami` mention
   opens the session; after that the user no longer needs to `@Ami` for the rest of the
-  conversation — until it idles out (`SESSION_TIMEOUT`) or is ended (`/end`/`/reset`).
+   conversation — until it idles out (`SESSION_TIMEOUT`) or is ended (`$end`/`$reset`).
   A message with no `@Ami` and no active session is simply ignored.
 - On the first message of a conversation she opens with a short **greeting that uses
   your name** (e.g. "Hi Maria! 👋"), and the system prompt always names the user so
   replies stay personal.
-- `/status` reports the current user and room.
+- `$status` reports the current user and room.
 - Idle sessions expire after `SESSION_TIMEOUT` and Ami posts a **personalized farewell**
   that names the user back into the room (`features/agent/prompt.ts` → `buildFarewell`).
 - `SessionStore` is an in-memory, pluggable store — swapping in Redis / `node-cache`
@@ -223,7 +223,7 @@ Ami now tracks **who** she is talking to, not just the raw message:
 - Language mirroring: casual everyday Taglish for Tagalog speakers, natural English otherwise — never switching mid-conversation
 - Confidentiality guard blocks sensitive topics (sweldo/sahod, pricing, credentials…) before any AI call
 - Escalation: when she can't resolve an issue she emits `[CREATE_TICKET]` and runs a guided **Department → Category → System → Problem** intake (menus from `ticket-categories.json`), then files the ticket into the configured Help Desk group(s) — see **Escalation to the Help Desk**
-- Knows exactly who she's talking to: greets by name on a fresh conversation, personalizes replies via the system prompt, and `/status` reports the user + room (see **User sessions & identity** above)
+- Knows exactly who she's talking to: greets by name on a fresh conversation, personalizes replies via the system prompt, and `$status` reports the user + room (see **User sessions & identity** above)
 - Rate limiting per user, idle session cleanup, multi-turn history per user per room
 - 📸 **Image analysis**: share a picture with `@Ami` in the caption and she'll analyze it (Gemini vision / GPT-4o) — screenshots of errors get diagnosed like a help desk agent. Replies are posted **in-thread** via `replyTo`.
 

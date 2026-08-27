@@ -84,22 +84,22 @@ export function registerTalkWebhook(app: express.Express): void {
         logger.info(`📨 Room ${roomToken} | ${user.displayName || actorId}: "${text.substring(0, 80)}"${imageParam ? ` 📸 [${imageParam.name}]` : ''}`);
 
         // ── Admin commands ──────────────────────────────────────────────────────
-        // Handled before the approval gate so the admin can approve/revoke/list
+        // Handled before the approval gate so the admin can $approve/$revoke/$list
         // even in a room Ami would otherwise ignore.
-        if (new RegExp('^/(' + ADMIN_COMMANDS.map(c => c.slice(1)).join('|') + ')(\\s|$)').test(text)) {
+        if (new RegExp('^\\$(' + ADMIN_COMMANDS.map(c => c.slice(1)).join('|') + ')(\\s|$)').test(text)) {
             if (!isAdmin) {
                 await sendTalkMessage(roomToken, '⛔ Only the Nextcloud admin can manage Ami.', messageId);
                 return;
             }
-            if (text === '/approve') {
+            if (text === '$approve') {
                 if (roomApprovalStore.approve(roomToken, roomName || roomToken, user.id)) {
-                    await sendTalkMessage(roomToken, '✅ Room approved — I\'ll answer here now. Type `/help` to see what I can do.', messageId);
+                    await sendTalkMessage(roomToken, '✅ Room approved — I\'ll answer here now. Type `$help` to see what I can do.', messageId);
                 } else {
                     await sendTalkMessage(roomToken, 'ℹ️ This room is already approved.', messageId);
                 }
                 return;
             }
-            if (text === '/revoke') {
+            if (text === '$revoke') {
                 if (roomApprovalStore.revoke(roomToken)) {
                     await sendTalkMessage(roomToken, '🔒 Room approval revoked — I\'ll ignore messages here until approved again.', messageId);
                 } else {
@@ -107,7 +107,7 @@ export function registerTalkWebhook(app: express.Express): void {
                 }
                 return;
             }
-            if (text === '/list') {
+            if (text === '$list') {
                 const rooms = roomApprovalStore.list();
                 const body = rooms.length
                     ? rooms.map(r => `- **${r.name}** (` + '`' + r.token + '`' + `) — approved by ${r.approvedBy}`).join('\n')
@@ -115,8 +115,8 @@ export function registerTalkWebhook(app: express.Express): void {
                 await sendTalkMessage(roomToken, `📋 **Approved rooms:**\n${body}`, messageId);
                 return;
             }
-            if (text === '/notify-add' || text.startsWith('/notify-add ')) {
-                const tok = text.slice('/notify-add'.length).trim();
+            if (text === '$notify-add' || text.startsWith('$notify-add ')) {
+                const tok = text.slice('$notify-add'.length).trim();
                 const target = tok || roomToken;
                 const targetName = tok ? tok : (roomName || roomToken);
                 const added = notificationStore.add(target, targetName, user.id);
@@ -132,17 +132,17 @@ export function registerTalkWebhook(app: express.Express): void {
                 await sendTalkMessage(roomToken, msg, messageId);
                 return;
             }
-            if (text === '/notify-remove' || text.startsWith('/notify-remove ')) {
-                const tok = text.slice('/notify-remove'.length).trim();
+            if (text === '$notify-remove' || text.startsWith('$notify-remove ')) {
+                const tok = text.slice('$notify-remove'.length).trim();
                 const target = tok || roomToken;
                 const removed = notificationStore.remove(target);
                 await sendTalkMessage(roomToken, removed ? `🔕 Removed notification room \`${target}\`.` : `ℹ️ Room \`${target}\` was not a notification target.`, messageId);
                 return;
             }
-            if (text === '/notify-test') {
+            if (text === '$notify-test') {
                 const rs = notificationStore.list();
                 if (!rs.length) {
-                    await sendTalkMessage(roomToken, 'ℹ️ No notification rooms configured — add one with `/notify-add` first.', messageId);
+                    await sendTalkMessage(roomToken, 'ℹ️ No notification rooms configured — add one with `$notify-add` first.', messageId);
                     return;
                 }
                 let okCount = 0;
@@ -157,7 +157,7 @@ export function registerTalkWebhook(app: express.Express): void {
                 await sendTalkMessage(roomToken, msg, messageId);
                 return;
             }
-            if (text === '/notify-list') {
+            if (text === '$notify-list') {
                 const rs = notificationStore.list();
                 const body = rs.length
                     ? rs.map(r => `- \`${r.token}\`${r.name ? ` (${r.name})` : ''} — added by ${r.addedBy}`).join('\n')

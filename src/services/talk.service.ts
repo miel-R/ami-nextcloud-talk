@@ -29,7 +29,7 @@ export class TalkAgent {
                 return "⚠️ I can't share information about that topic. If you need help with a legitimate issue, describe it and I'll escalate it to the right team.";
             }
 
-            if (message === '/reset') {
+            if (message === '$reset') {
                 sessionStore.delete(key);
                 return '🔄 Conversation reset. How can I help you?';
             }
@@ -37,13 +37,13 @@ export class TalkAgent {
                 sessionStore.delete(key);
                 return "👋 Goodbye! Your conversation has ended. If you ever need help again, just send a message and I'll be here. Take care! 😊";
             }
-            if (message === '/help') {
+            if (message === '$help') {
                 return helpMessage(isAdmin);
             }
-            if (message === '/whoami') {
-                return `🪪 I recognise you as **${user.displayName || user.id}** (id: \`${user.id}\`)${isAdmin ? ' — you are the Nextcloud admin, so you can manage room approval with `/approve`, `/revoke` and `/list`.' : ''}.`;
+            if (message === '$whoami') {
+                return `🪪 I recognise you as **${user.displayName || user.id}** (id: \`${user.id}\`)${isAdmin ? ' — you are the Nextcloud admin, so you can manage room approval with `$approve`, `$revoke` and `$list`.' : ''}.`;
             }
-            if (message === '/status') {
+            if (message === '$status') {
                 return sessionStore.describe(key);
             }
 
@@ -153,7 +153,7 @@ export class TalkAgent {
                 sessionStore.touch(session.key);
                 const where = rooms.length
                     ? `I've sent your request to ${rooms.length} Help Desk group chat(s).`
-                    : 'I couldn\'t find a configured Help Desk group to notify — ask your admin to run /notify-add <roomToken>.';
+                    : 'I couldn\'t find a configured Help Desk group to notify — ask your admin to run $notify-add <roomToken>.';
                 return `✅ Thanks ${user.displayName || user.id}, your request is logged:\n\n${ticket}\n\n${where} Someone will follow up with you here.`;
             }
         }
