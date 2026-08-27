@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Request } from 'express';
-import { logger } from '../logger';
+import { logger } from '../../core/logger';
 
 /**
  * Verifies the signature of an inbound webhook from Nextcloud Talk.

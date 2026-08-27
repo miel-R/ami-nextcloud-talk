@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { config } from '../config';
-import { logger } from '../logger';
-import { FileParameter, ImageAttachment } from './types';
+import { config } from '../../config/config.service';
+import { logger } from '../../core/logger';
+import { FileParameter, ImageAttachment } from '../../models/webhook.model';
 
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
 

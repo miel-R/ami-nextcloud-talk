@@ -66,7 +66,7 @@ Same as the Teams version:
 | Command | What it does |
 |---|---|
 | `/help` | Show the help message |
-| `/status` | Show current conversation state |
+| `/status` | Show who Ami is talking to (user + room) and the conversation state |
 | `/reset` | Clear conversation history |
 | `/end` (`/exit`, `/quit`) | End the conversation |
 
@@ -88,12 +88,68 @@ Loaded from `.env` then `env/.env.dev.user` (secrets override). See `.env.exampl
 
 With no AI key configured, the bot runs but answers with a "no AI configured" notice.
 
+## Project structure
+
+The code follows a layered layout (controllers → services → models, with
+domain logic under `features`):
+
+```
+src/
+  index.ts                     boot + graceful shutdown + idle-session farewell wiring
+  app.ts                       express bootstrap, raw-body capture, route mounting
+
+  controllers/                 HTTP handling — parse webhook, call services
+    talk-webhook.controller.ts
+    health.controller.ts
+
+  services/                    business logic
+    session.service.ts         SessionStore (in-memory, TTL, idle-expiry callback)
+    talk.service.ts            TalkAgent: orchestrates a message → reply
+    ai.service.ts              AI router (gemini / openai / azure)
+    talk/                      Nextcloud Talk transport
+      talk-client.service.ts   sendTalkMessage (signed OCS reply)
+      talk-verify.service.ts   verifyTalkSignature + buildSignedHeaders
+      talk-files.service.ts    downloadTalkImage (public share / WebDAV)
+
+  models/                      data shapes
+    user.model.ts              User { id, displayName, email } + fromActor()
+    session.model.ts           Session { key, user, roomToken, history, ... }
+    message.model.ts           HistoryItem, ImageData, NormalizedMessage
+    webhook.model.ts           TalkActor/Webhook, FileParameter, render/extract
+
+  features/                    fully-contained business domains
+    agent/
+      prompt.ts                MASTER_SYSTEM_PROMPT + buildSystemPrompt(user)
+      commands.ts              /help, /status, /end, /reset
+    ai/providers/              one file per AI backend
+      gemini.ts  openai.ts  azure.ts
+
+  config/config.service.ts     env loading + Config
+  core/logger.ts               logger
+```
+
+### User sessions & identity
+
+Ami now tracks **who** she is talking to, not just the raw message:
+
+- Each conversation is a `Session` scoped per **room + user** (`User` parsed from the
+  webhook `actor`: clean `id` with the `users/` prefix stripped, plus `displayName`).
+- On the first message of a conversation she opens with a short **greeting that uses
+  your name** (e.g. "Hi Maria! 👋"), and the system prompt always names the user so
+  replies stay personal.
+- `/status` reports the current user and room.
+- Idle sessions expire after `SESSION_TIMEOUT` and Ami posts a farewell back into the
+  room (`features/agent/prompt.ts` → `SESSION_FAREWELL`).
+- `SessionStore` is an in-memory, pluggable store — swapping in Redis / `node-cache`
+  later requires no change to the agent logic.
+
 ## Personality carried over from Teams Ami
 
 - Master system prompt: warm, empathetic help desk agent for Amertron
 - Language mirroring: casual everyday Taglish for Tagalog speakers, natural English otherwise — never switching mid-conversation
 - Confidentiality guard blocks sensitive topics (sweldo/sahod, pricing, credentials…) before any AI call
 - Escalation detection: `[CREATE_TICKET]` intent or explicit "create ticket" requests get logged-for-the-team responses
+- Knows exactly who she's talking to: greets by name on a fresh conversation, personalizes replies via the system prompt, and `/status` reports the user + room (see **User sessions & identity** above)
 - Rate limiting per user, idle session cleanup, multi-turn history per user per room
 - 📸 **Image analysis**: share a picture with `@Ami` in the caption and she'll analyze it (Gemini vision / GPT-4o) — screenshots of errors get diagnosed like a help desk agent. Replies are posted **in-thread** via `replyTo`.
 

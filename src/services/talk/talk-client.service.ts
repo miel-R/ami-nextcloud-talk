@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import axios from 'axios';
-import { config } from '../config';
-import { logger } from '../logger';
+import { config } from '../../config/config.service';
+import { logger } from '../../core/logger';
 
 /**
  * Sends a chat message back to a Nextcloud Talk room, acting as the bot.
