@@ -2,7 +2,7 @@
 
 Standalone **Nextcloud Talk bot** that carries over the personality of *Ami*, the Amertron Help Desk assistant (from `CODENAME-AMI-TEAMS-CENGINEv1`): warm Taglish/English mirroring, IT help desk behavior, confidentiality guard, and the familiar commands.
 
-> 🧩 **Built for [Nextcloud All-in-One](https://github.com/nextcloud/all-in-one)** — companion repo: [`nextcloud-aio-customs`](https://github.com/miel-R/nextcloud-aio-customs) documents the local AIO modifications (ngrok tunnel service, Windows DNS quirk fix) this bot was deployed with.
+> 🧩 **Built for [Nextcloud All-in-One](https://github.com/nextcloud/all-in-one)** — companion repo: [`nextcloud-aio-customs`](https://github.com/miel-R/nextcloud-aio-customs) documents the AIO deployments this bot runs on: the **Tailscale-Funnel** setup (no open ports, `*.ts.net`) and the **production server** setup (ports 80/443/3478 open, real domain). Both deploy Ami **container-to-container** on the `nextcloud-aio` network.
 
 It does **not** use the Bot Framework / Microsoft 365 Agents Toolkit — Nextcloud Talk has its own bot protocol (webhook in, signed OCS request out), so this project implements that directly while reusing Ami's persona, AI service, and conversation logic.
 
@@ -21,9 +21,14 @@ npm install
 
 # 1. Register the bot on your Nextcloud instance (run inside the AIO nextcloud container):
 #    docker exec -u www-data nextcloud-aio-nextcloud php occ talk:bot:install \
-#        http://host.docker.internal:3979/api/talk/webhook "Ami" --feature response
+#        Ami <SECRET> http://ami-talk-bot:3979/api/talk/webhook \
+#        "Ami Help Desk assistant" --feature webhook --feature response
 #
-#    → note the SECRET it prints
+#    → note the SECRET / bot ID it prints
+#
+#    (Local dev alternative — bot running on the Windows host instead of a container:
+#     use http://host.docker.internal:3979/api/talk/webhook, which Docker Desktop
+#     containers resolve via the host gateway.)
 #
 # 2. Copy .env.example to env/.env.dev.user and fill in TALK_SERVER_URL,
 #    SECRET_TALK_SECRET and your AI key(s).
@@ -35,7 +40,10 @@ npm run dev
 
 The webhook listens on `http://localhost:3979/api/talk/webhook`.
 
-> `host.docker.internal` works from Docker Desktop containers on Windows, which is how the Nextcloud container reaches the bot running on your host.
+> For the **containerized** deploy (recommended, and what production uses), the bot runs
+> as the `ami-talk-bot` container on the `nextcloud-aio` network, so Nextcloud reaches it
+> at `http://ami-talk-bot:3979/api/talk/webhook`. `host.docker.internal` is only for the
+> bot running directly on the Windows host. See [`DEPLOYMENT.md`](DEPLOYMENT.md) §3–§4.
 
 ## Enable Ami in a room
 
@@ -43,7 +51,11 @@ Bots are enabled per conversation by the room owner:
 
 - Open the Talk conversation → **conversation settings** → **Bots** → enable **Ami**
 
-(or via API as room owner: `POST /ocs/v2.php/apps/spreed/api/v4/room/{token}/bots/{botId}` with `{"state": 1}`.)
+(or via API as room owner — **use API version `v1`, not `v4`**; on Talk 24 `v4` returns
+404/998 for this route: `POST /ocs/v2.php/apps/spreed/api/v1/bot/{token}/{botId}` with
+header `OCS-APIRequest: true` → `201 Created`. The room owner must be a **moderator** —
+`occ talk:room:create --user admin` adds admin as a plain participant, so run
+`occ talk:room:promote {token} admin` first, or the enable call returns `403`.)
 
 Then just chat — or type `/help`.
 
@@ -88,5 +100,5 @@ With no AI key configured, the bot runs but answers with a "no AI configured" no
 ## Production notes
 
 - Run behind HTTPS or keep it on the local network only; anyone who can reach the webhook without the secret cannot forge messages (signature verified when `TALK_SECRET` is set).
-- For production-style run: `npm run build && npm start`.
-- To remove the bot later: `occ talk:bot:remove <url>`.
+- For production-style run: `npm run build && npm start`, or build the Docker image and run it on the `nextcloud-aio` network (see [`DEPLOYMENT.md`](DEPLOYMENT.md) §4). The recommended production topology is **container-to-container**: Nextcloud → `http://ami-talk-bot:3979` (webhook) and bot → Nextcloud (internal Apache or the public HTTPS URL) — the Funnel/public port is only for external user traffic. Full server deployment (real domain, ports 80/443/3478, Let's Encrypt) is documented in the companion repo's [`SERVER-DEPLOYMENT.md`](https://github.com/miel-R/nextcloud-aio-customs/blob/main/SERVER-DEPLOYMENT.md).
+- To remove the bot later: `occ talk:bot:uninstall <id>` (lists IDs via `occ talk:bot:list`). Reinstalling generates a new bot ID, so re-enable it in each room afterward.
