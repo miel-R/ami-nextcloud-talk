@@ -80,7 +80,7 @@ Loaded from `.env` then `env/.env.dev.user` (secrets override). See `.env.exampl
 | `TALK_SERVER_URL` | Your Nextcloud base URL (no trailing slash) | — |
 | `SECRET_TALK_SECRET` | Secret from `talk:bot:install` | — |
 | `TALK_WEBHOOK_PATH` | Webhook route | `/api/talk/webhook` |
-| `TALK_REQUIRE_MENTION` | Only reply when @Ami is mentioned | `false` |
+| `TALK_REQUIRE_MENTION` | Require `@Ami` to **start** a conversation; once a session is active, no mention is needed until it expires or ends | `false` |
 | `AI_PROVIDER` | `auto` \| `gemini` \| `openai` \| `azure` | `auto` |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `AZURE_*` | AI keys | — |
 | `SENSITIVE_TOPICS` | Extra blocked phrases | built-in list |
@@ -134,12 +134,16 @@ Ami now tracks **who** she is talking to, not just the raw message:
 
 - Each conversation is a `Session` scoped per **room + user** (`User` parsed from the
   webhook `actor`: clean `id` with the `users/` prefix stripped, plus `displayName`).
+- **Mention-to-start:** when `TALK_REQUIRE_MENTION` is on, the *first* `@Ami` mention
+  opens the session; after that the user no longer needs to `@Ami` for the rest of the
+  conversation — until it idles out (`SESSION_TIMEOUT`) or is ended (`/end`/`/reset`).
+  A message with no `@Ami` and no active session is simply ignored.
 - On the first message of a conversation she opens with a short **greeting that uses
   your name** (e.g. "Hi Maria! 👋"), and the system prompt always names the user so
   replies stay personal.
 - `/status` reports the current user and room.
-- Idle sessions expire after `SESSION_TIMEOUT` and Ami posts a farewell back into the
-  room (`features/agent/prompt.ts` → `SESSION_FAREWELL`).
+- Idle sessions expire after `SESSION_TIMEOUT` and Ami posts a **personalized farewell**
+  that names the user back into the room (`features/agent/prompt.ts` → `buildFarewell`).
 - `SessionStore` is an in-memory, pluggable store — swapping in Redis / `node-cache`
   later requires no change to the agent logic.
 

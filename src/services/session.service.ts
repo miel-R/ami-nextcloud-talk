@@ -53,6 +53,11 @@ export class SessionStore {
         return this.sessions.get(key);
     }
 
+    /** True when an active session already exists for this room + raw Talk actor id. */
+    has(roomToken: string, rawActorId: string): boolean {
+        return this.sessions.has(sessionKey(roomToken, rawActorId));
+    }
+
     delete(key: string): void {
         this.sessions.delete(key);
     }

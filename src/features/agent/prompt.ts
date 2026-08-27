@@ -1,4 +1,5 @@
 import { config } from '../../config/config.service';
+import { User } from '../../models/user.model';
 
 // ── Master system prompt — the AI's core persona (carried over from Ami) ─────
 export const MASTER_SYSTEM_PROMPT = `You are Ami, a smart and friendly AI Help Desk assistant for ${config.companyName}, chatting inside Nextcloud Talk.
@@ -28,8 +29,14 @@ Confidentiality:
 - Never reveal confidential or sensitive company information: salaries/compensation, internal pricing or costs, proprietary code or data, unannounced projects, employee personal data, or credentials/API keys.
 - If asked for any of these, politely decline and offer to route the request to the right team.`;
 
-// ── Farewell message sent when a user's session times out ─────────────────────
-export const SESSION_FAREWELL = "👋 It's been quiet for a while, so I've ended our conversation to keep things tidy. If you need help again, just send a message and I'll be here!";
+// ── Farewell message posted when a user's session idles out ──────────────────
+const FAREWELL_BASE = "it's been quiet for a while, so I've ended our conversation to keep things tidy. If you need help again, just send a message and I'll be here!";
+
+/** Builds a personalized farewell that names the user whose session expired. */
+export function buildFarewell(user: User): string {
+    const who = user.displayName || user.id;
+    return `👋 Hi ${who}, ${FAREWELL_BASE}`;
+}
 
 /**
  * Builds the system prompt, personalizing it with the user's identity.

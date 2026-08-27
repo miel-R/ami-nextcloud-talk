@@ -8,6 +8,7 @@ import { downloadTalkImage } from '../services/talk/talk-files.service';
 import { extractImageFromContent, renderMessageText, TalkWebhook } from '../models/webhook.model';
 import { fromActor } from '../models/user.model';
 import { ImageData } from '../models/message.model';
+import { sessionStore } from '../services/session.service';
 
 type WebhookRequest = express.Request & { rawBody?: Buffer };
 
@@ -52,19 +53,24 @@ export function registerTalkWebhook(app: express.Express): void {
             return;
         }
 
-        // Images ALWAYS require an @Ami mention — so random screenshots in the room
-        // don't trigger analysis; only messages explicitly addressed to Ami do.
+        // A mention is only required to START a session. Once a session is active
+        // for this room + user, the user no longer needs to @Ami — matching a
+        // natural "talk to Ami" conversation — until it idles out or is ended.
+        const sessionActive = sessionStore.has(roomToken, actorId);
         const isMentioned = /@ami\b/i.test(text);
+
         if (imageParam) {
-            if (!isMentioned) {
-                logger.info(`🖼️ Image "${imageParam.name}" from ${hook.actor.name || actorId} has no @Ami mention — ignoring.`);
+            // Before a session exists, an image still needs an @Ami mention so
+            // random screenshots don't trigger analysis. Once armed, it doesn't.
+            if (!isMentioned && !sessionActive) {
+                logger.info(`🖼️ Image "${imageParam.name}" from ${hook.actor.name || actorId} has no @Ami mention and no active session — ignoring.`);
                 return;
             }
             // Strip the mention so the AI sees the actual request/caption
             text = text.replace(/@ami\b\s*/gi, '').trim();
         } else {
-            // Text-only messages follow the configured mention gate
-            if (config.talkRequireMention && !isMentioned) return;
+            // Text: require @Ami only when there's no active session AND the global gate is on
+            if (config.talkRequireMention && !sessionActive && !isMentioned) return;
             // Strip a leading @Ami mention so the AI sees the actual request
             text = text.replace(/^@ami\s*/i, '').trim() || 'Hello!';
         }
