@@ -5,7 +5,11 @@ import { sessionStore, sessionKey } from './session.service';
 import { buildSystemPrompt } from '../features/agent/prompt';
 import { helpMessage, isEndCommand } from '../features/agent/commands';
 import { User } from '../models/user.model';
+import { Session } from '../models/session.model';
 import { ImageData } from '../models/message.model';
+import { sendTalkMessage } from './talk/talk-client.service';
+import { notificationStore } from './notification.service';
+import { getDepartments, getCategories, renderMenu, parseChoice, formatTicket } from '../features/agent/ticket';
 
 export class TalkAgent {
     private userRequestCount: Map<string, { count: number; resetTime: number }> = new Map();
@@ -48,6 +52,12 @@ export class TalkAgent {
             }
 
             const session = sessionStore.getOrCreate(roomToken, roomName, user, rawActorId);
+
+            // Mid-escalation: drive the structured intake instead of the AI.
+            if (session.escalation) {
+                return this.handleEscalationStep(session, message, roomName, user);
+            }
+
             const isNewConversation = session.history.length === 0;
             session.lastActivity = Date.now();
 
@@ -62,8 +72,12 @@ export class TalkAgent {
             let response = await aiService.callAI(userText, systemPrompt, history, image);
 
             if (this.needsEscalation(response, message)) {
-                response = response.replace('[CREATE_TICKET]', '').trim();
-                response += "\n\n🔔 I've logged this issue for the Help Desk team — they'll follow up with you here.";
+                session.escalation = { step: 'department' };
+                sessionStore.touch(key);
+                return renderMenu(
+                    'I\'ll get the right team to help. Which department should handle this? (reply with the number)',
+                    getDepartments().map(d => d.label)
+                );
             }
 
             history.push({ role: 'model', content: response });
@@ -79,6 +93,70 @@ export class TalkAgent {
 
     getActiveConversationCount(): number {
         return sessionStore.activeCount();
+    }
+
+    /**
+     * Drives the multi-step escalation intake (Department → Category → System → Problem)
+     * and, on the final step, posts the ticket to every configured notification room.
+     */
+    private async handleEscalationStep(session: Session, message: string, roomName: string | undefined, user: User): Promise<string> {
+        const esc = session.escalation!;
+
+        // Let the user bail out of the intake at any point.
+        if (/^\/cancel$/i.test(message) || isEndCommand(message)) {
+            session.escalation = undefined;
+            sessionStore.touch(session.key);
+            return isEndCommand(message)
+                ? "👋 Okay, I've cancelled the request. If you need anything else, just ask!"
+                : '❌ Escalation cancelled. How else can I help?';
+        }
+
+        switch (esc.step) {
+            case 'department': {
+                const depts = getDepartments();
+                const idx = parseChoice(message, depts.map(d => d.label));
+                if (idx < 0) return 'Please reply with the number of your department, e.g. 1) IT / Help Desk.';
+                esc.departmentId = depts[idx].id;
+                esc.departmentLabel = depts[idx].label;
+                esc.step = 'category';
+                sessionStore.touch(session.key);
+                return renderMenu(`Thanks — under **${depts[idx].label}**. What category is it? (reply with the number)`, getCategories(depts[idx].id).map(c => c.label));
+            }
+            case 'category': {
+                const cats = getCategories(esc.departmentId!);
+                const idx = parseChoice(message, cats.map(c => c.label));
+                if (idx < 0) return 'Please reply with the number of the category.';
+                esc.categoryId = cats[idx].id;
+                esc.categoryLabel = cats[idx].label;
+                esc.step = 'system';
+                sessionStore.touch(session.key);
+                return renderMenu('Got it. Which item exactly? (reply with the number)', cats[idx].systemTypes);
+            }
+            case 'system': {
+                const cat = getCategories(esc.departmentId!).find(c => c.id === esc.categoryId);
+                const sys = cat?.systemTypes || [];
+                const idx = parseChoice(message, sys);
+                if (idx < 0) return 'Please reply with the number of the item.';
+                esc.systemType = sys[idx];
+                esc.step = 'problem';
+                sessionStore.touch(session.key);
+                return 'Almost there — please describe the problem in your own words (a sentence or two is fine).';
+            }
+            case 'problem': {
+                esc.problem = message.trim();
+                const ticket = formatTicket(esc, user, roomName);
+                const rooms = notificationStore.list();
+                for (const r of rooms) {
+                    await sendTalkMessage(r.token, ticket);
+                }
+                session.escalation = undefined;
+                sessionStore.touch(session.key);
+                const where = rooms.length
+                    ? `I've sent your request to ${rooms.length} Help Desk group chat(s).`
+                    : 'I couldn\'t find a configured Help Desk group to notify — ask your admin to run /notify-add <roomToken>.';
+                return `✅ Thanks ${user.displayName || user.id}, your request is logged:\n\n${ticket}\n\n${where} Someone will follow up with you here.`;
+            }
+        }
     }
 
     resetAll(): void {

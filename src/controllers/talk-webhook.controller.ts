@@ -10,6 +10,8 @@ import { fromActor } from '../models/user.model';
 import { ImageData } from '../models/message.model';
 import { sessionStore } from '../services/session.service';
 import { roomApprovalStore } from '../services/room-approval.service';
+import { notificationStore } from '../services/notification.service';
+import { enableBotInRoom } from '../services/talk/talk-client.service';
 import { ADMIN_COMMANDS, isAdminUser } from '../features/agent/commands';
 
 type WebhookRequest = express.Request & { rawBody?: Buffer };
@@ -84,9 +86,9 @@ export function registerTalkWebhook(app: express.Express): void {
         // ── Admin commands ──────────────────────────────────────────────────────
         // Handled before the approval gate so the admin can approve/revoke/list
         // even in a room Ami would otherwise ignore.
-        if (ADMIN_COMMANDS.includes(text)) {
+        if (new RegExp('^/(' + ADMIN_COMMANDS.map(c => c.slice(1)).join('|') + ')(\\s|$)').test(text)) {
             if (!isAdmin) {
-                await sendTalkMessage(roomToken, '⛔ Only the Nextcloud admin can manage room approval.', messageId);
+                await sendTalkMessage(roomToken, '⛔ Only the Nextcloud admin can manage Ami.', messageId);
                 return;
             }
             if (text === '/approve') {
@@ -111,6 +113,37 @@ export function registerTalkWebhook(app: express.Express): void {
                     ? rooms.map(r => `- **${r.name}** (` + '`' + r.token + '`' + `) — approved by ${r.approvedBy}`).join('\n')
                     : '_No rooms approved yet._';
                 await sendTalkMessage(roomToken, `📋 **Approved rooms:**\n${body}`, messageId);
+                return;
+            }
+            if (text.startsWith('/notify-add ')) {
+                const tok = text.slice('/notify-add '.length).trim();
+                if (!tok) {
+                    await sendTalkMessage(roomToken, '⚠️ Usage: `/notify-add <roomToken>`', messageId);
+                    return;
+                }
+                const added = notificationStore.add(tok, roomName || tok, user.id);
+                let msg = added ? `🔔 Added notification room \`${tok}\`.` : `ℹ️ Room \`${tok}\` is already a notification target.`;
+                try {
+                    await enableBotInRoom(tok, config.talkBotId);
+                    msg += ' Ami has been enabled in that room.';
+                } catch (error: any) {
+                    msg += ` ⚠️ Could not auto-enable Ami there (${error?.message || 'check admin creds / bot id'}); enable her manually.`;
+                }
+                await sendTalkMessage(roomToken, msg, messageId);
+                return;
+            }
+            if (text.startsWith('/notify-remove ')) {
+                const tok = text.slice('/notify-remove '.length).trim();
+                const removed = notificationStore.remove(tok);
+                await sendTalkMessage(roomToken, removed ? `🔕 Removed notification room \`${tok}\`.` : `ℹ️ Room \`${tok}\` was not a notification target.`, messageId);
+                return;
+            }
+            if (text === '/notify-list') {
+                const rs = notificationStore.list();
+                const body = rs.length
+                    ? rs.map(r => `- \`${r.token}\`${r.name ? ` (${r.name})` : ''} — added by ${r.addedBy}`).join('\n')
+                    : '_No notification rooms configured._';
+                await sendTalkMessage(roomToken, `🔔 **Notification rooms:**\n${body}`, messageId);
                 return;
             }
         }

@@ -79,6 +79,9 @@ work even in a room Ami would otherwise ignore:
 | `/approve` | Approve **this** room so Ami answers here |
 | `/revoke` | Revoke **this** room's approval |
 | `/list` | List every approved room |
+| `/notify-add <token>` | Add a group chat that receives escalation tickets (auto-enables Ami there) |
+| `/notify-remove <token>` | Remove a group chat from escalation notifications |
+| `/notify-list` | List the group chats that receive escalation tickets |
 
 ## Room approval gate
 
@@ -92,6 +95,38 @@ Until then, every message in the room (including `@Ami` mentions) is ignored.
 Approvals are stored in `data/approved-rooms.json` and persist across container
 rebuilds via the `ami-data` Docker volume. The admin can revoke a room with
 `@Ami /revoke` or see all approved rooms with `@Ami /list`.
+
+## Escalation to the Help Desk
+
+When Ami can't resolve a request, she automatically starts a short structured
+intake and files a ticket:
+
+1. **Department** (e.g. IT / Help Desk, HR, Other)
+2. **Category** (per department)
+3. **System type** (per department + category)
+4. **Problem** (free text)
+
+The ticket is posted as Ami into every configured notification group chat. To
+configure those groups (admin only):
+
+- `@Ami /notify-add <roomToken>` — add a group chat; Ami is auto-enabled there
+  so she can post the ticket. (The "Ami Help Desk" group is a good target —
+  with chat disabled for humans, only Ami can post, so it's a clean notification sink.)
+- `@Ami /notify-remove <roomToken>` / `@Ami /notify-list`
+
+Notification targets persist in `data/notify-rooms.json` (same volume).
+
+### Departments / categories / system types
+
+These are **data-driven** from `ticket-categories.json` at the repo root (copied
+into the image). IT is fully populated; HR and Other are `TODO` stubs. To add a
+department or fill in categories, edit that file and rebuild:
+
+```bash
+npm run build && docker compose up -d --build
+```
+
+No code changes are needed — the intake menus are generated from the file.
 
 ## Configuration
 

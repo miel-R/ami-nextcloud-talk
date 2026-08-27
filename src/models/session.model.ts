@@ -1,5 +1,6 @@
 import { User } from './user.model';
 import { HistoryItem } from './message.model';
+import { EscalationState } from '../features/agent/ticket';
 
 /** An isolated conversation thread, scoped per room + user. */
 export interface Session {
@@ -11,4 +12,6 @@ export interface Session {
     history: HistoryItem[];
     createdAt: number;
     lastActivity: number;
+    /** Present while Ami is collecting a structured escalation request. */
+    escalation?: EscalationState;
 }

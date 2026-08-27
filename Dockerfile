@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package*.json tsconfig.json ./
 COPY src ./src
+COPY ticket-categories.json ./
 
 RUN npm install --no-audit --no-fund \
     && npm run build \

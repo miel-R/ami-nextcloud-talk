@@ -54,3 +54,29 @@ export async function sendTalkMessage(roomToken: string, text: string, replyTo?:
         logger.error(`❌ Failed to post reply to room ${roomToken}:`, error.response?.status, JSON.stringify(error.response?.data) || error.message);
     }
 }
+
+/**
+ * Enables the bot in a room using the admin account, so Ami can post there.
+ * Endpoint: POST {server}/ocs/v2.php/apps/spreed/api/v1/bot/{roomToken}/{botId}
+ * (Talk v1 bot-enable API, authed as the Nextcloud admin user.)
+ */
+export async function enableBotInRoom(roomToken: string, botId: string): Promise<void> {
+    if (!config.talkServerUrl || !config.talkAdminUser || !config.talkAdminPassword) {
+        throw new Error('admin creds not configured');
+    }
+    const url = `${config.talkServerUrl}/ocs/v2.php/apps/spreed/api/v1/bot/${roomToken}/${botId}`;
+    try {
+        await axios.post(url, {}, {
+            auth: { username: config.talkAdminUser, password: config.talkAdminPassword },
+            headers: { 'OCS-APIRequest': 'true', 'Accept': 'application/json' },
+            timeout: 15000
+        });
+    } catch (error: any) {
+        // 403 means the bot is already enabled in that room — not an error.
+        if (error?.response?.status === 403) {
+            logger.info(`ℹ️ Bot already enabled in ${roomToken} (403).`);
+            return;
+        }
+        throw error;
+    }
+}

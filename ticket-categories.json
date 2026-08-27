@@ -1,0 +1,44 @@
+{
+  "departments": [
+    {
+      "id": "it",
+      "label": "IT / Help Desk",
+      "categories": [
+        {
+          "id": "hardware",
+          "label": "Hardware",
+          "systemTypes": ["Hardware", "Barcode Scanner", "Computer", "Firewall", "Keyboard", "Laptop", "Monitor", "Mouse", "Printer", "Server", "Shared Folder"]
+        },
+        {
+          "id": "software",
+          "label": "Software",
+          "systemTypes": ["Software", "Oracle", "Outlook Email", "VPN"]
+        },
+        {
+          "id": "account",
+          "label": "Account",
+          "systemTypes": ["Account"]
+        },
+        {
+          "id": "network",
+          "label": "Network",
+          "systemTypes": ["Internet", "Network"]
+        }
+      ]
+    },
+    {
+      "id": "hr",
+      "label": "HR",
+      "categories": [
+        { "id": "todo", "label": "TODO — define HR categories", "systemTypes": ["TODO"] }
+      ]
+    },
+    {
+      "id": "other",
+      "label": "Other",
+      "categories": [
+        { "id": "todo", "label": "TODO — define categories", "systemTypes": ["TODO"] }
+      ]
+    }
+  ]
+}
