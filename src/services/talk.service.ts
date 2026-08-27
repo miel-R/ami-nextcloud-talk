@@ -15,7 +15,7 @@ export class TalkAgent {
     }
 
     /** Returns the reply text for an incoming chat message from a Talk user. */
-    async handleMessage(roomToken: string, roomName: string | undefined, rawActorId: string, user: User, message: string, image?: ImageData): Promise<string> {
+    async handleMessage(roomToken: string, roomName: string | undefined, rawActorId: string, user: User, message: string, image: ImageData | undefined, isAdmin: boolean): Promise<string> {
         const key = sessionKey(roomToken, rawActorId);
 
         try {
@@ -34,7 +34,10 @@ export class TalkAgent {
                 return "👋 Goodbye! Your conversation has ended. If you ever need help again, just send a message and I'll be here. Take care! 😊";
             }
             if (message === '/help') {
-                return helpMessage();
+                return helpMessage(isAdmin);
+            }
+            if (message === '/whoami') {
+                return `🪪 I recognise you as **${user.displayName || user.id}** (id: \`${user.id}\`)${isAdmin ? ' — you are the Nextcloud admin, so you can manage room approval with `/approve`, `/revoke` and `/list`.' : ''}.`;
             }
             if (message === '/status') {
                 return sessionStore.describe(key);

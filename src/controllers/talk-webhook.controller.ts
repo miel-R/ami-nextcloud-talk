@@ -9,6 +9,8 @@ import { extractImageFromContent, renderMessageText, TalkWebhook } from '../mode
 import { fromActor } from '../models/user.model';
 import { ImageData } from '../models/message.model';
 import { sessionStore } from '../services/session.service';
+import { roomApprovalStore } from '../services/room-approval.service';
+import { ADMIN_COMMANDS, isAdminUser } from '../features/agent/commands';
 
 type WebhookRequest = express.Request & { rawBody?: Buffer };
 
@@ -76,7 +78,46 @@ export function registerTalkWebhook(app: express.Express): void {
         }
 
         const user = fromActor(hook.actor);
+        const isAdmin = isAdminUser(user);
         logger.info(`📨 Room ${roomToken} | ${user.displayName || actorId}: "${text.substring(0, 80)}"${imageParam ? ` 📸 [${imageParam.name}]` : ''}`);
+
+        // ── Admin commands ──────────────────────────────────────────────────────
+        // Handled before the approval gate so the admin can approve/revoke/list
+        // even in a room Ami would otherwise ignore.
+        if (ADMIN_COMMANDS.includes(text)) {
+            if (!isAdmin) {
+                await sendTalkMessage(roomToken, '⛔ Only the Nextcloud admin can manage room approval.', messageId);
+                return;
+            }
+            if (text === '/approve') {
+                if (roomApprovalStore.approve(roomToken, roomName || roomToken, user.id)) {
+                    await sendTalkMessage(roomToken, '✅ Room approved — I\'ll answer here now. Type `/help` to see what I can do.', messageId);
+                } else {
+                    await sendTalkMessage(roomToken, 'ℹ️ This room is already approved.', messageId);
+                }
+                return;
+            }
+            if (text === '/revoke') {
+                if (roomApprovalStore.revoke(roomToken)) {
+                    await sendTalkMessage(roomToken, '🔒 Room approval revoked — I\'ll ignore messages here until approved again.', messageId);
+                } else {
+                    await sendTalkMessage(roomToken, 'ℹ️ This room was not approved.', messageId);
+                }
+                return;
+            }
+            if (text === '/list') {
+                const rooms = roomApprovalStore.list();
+                const body = rooms.length
+                    ? rooms.map(r => `- **${r.name}** (` + '`' + r.token + '`' + `) — approved by ${r.approvedBy}`).join('\n')
+                    : '_No rooms approved yet._';
+                await sendTalkMessage(roomToken, `📋 **Approved rooms:**\n${body}`, messageId);
+                return;
+            }
+        }
+
+        // ── Approval gate ───────────────────────────────────────────────────────
+        // Unapproved rooms are ignored entirely; the admin already had their chance above.
+        if (!roomApprovalStore.isApproved(roomToken)) return;
 
         try {
             let image: ImageData | undefined;
@@ -87,7 +128,7 @@ export function registerTalkWebhook(app: express.Express): void {
                     return;
                 }
             }
-            const reply = await talkAgent.handleMessage(roomToken, roomName, actorId, user, text, image);
+            const reply = await talkAgent.handleMessage(roomToken, roomName, actorId, user, text, image, isAdmin);
             await sendTalkMessage(roomToken, reply, messageId);
         } catch (error) {
             logger.error('Error handling webhook:', error);

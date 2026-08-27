@@ -1,4 +1,5 @@
 import { config } from '../../config/config.service';
+import { User } from '../../models/user.model';
 
 /** Commands that end the conversation and clear the session. */
 export const END_COMMANDS = ['/end', '/exit', '/quit'];
@@ -7,9 +8,29 @@ export function isEndCommand(message: string): boolean {
     return END_COMMANDS.includes(message);
 }
 
-/** The text shown for `/help`. */
-export function helpMessage(): string {
-    return [
+/** Commands any approved user can run. */
+export const USER_COMMANDS = ['/help', '/status', '/whoami', '/reset', '/end'];
+
+/** Commands only the Nextcloud admin account may run. */
+export const ADMIN_COMMANDS = ['/approve', '/revoke', '/list'];
+
+const ADMIN_COMMAND_DESCRIPTIONS: Record<string, string> = {
+    '/approve': 'Approve this room so Ami answers here',
+    '/revoke': 'Revoke this room\'s approval',
+    '/list': 'List every approved room'
+};
+
+/**
+ * True when the sender is the configured Nextcloud admin account.
+ * Pure string comparison against TALK_ADMIN_USER — no Talk API / DB / Apache call.
+ */
+export function isAdminUser(user: User): boolean {
+    return config.talkAdminUser !== '' && user.id === config.talkAdminUser;
+}
+
+/** The text shown for `/help`. Admins also see the admin command tier. */
+export function helpMessage(isAdmin: boolean): string {
+    const lines = [
         `🤖 **Ami - ${config.companyName} Help Desk**`,
         '',
         'Just talk to me naturally! I can:',
@@ -21,7 +42,15 @@ export function helpMessage(): string {
         '**Commands:**',
         '- `/reset` — Clear conversation and start fresh',
         '- `/status` — See who I\'m talking to and the conversation state',
+        '- `/whoami` — Show the account I recognise you as',
         '- `/end` — End the conversation',
         '- `/help` — Show this message'
-    ].join('\n');
+    ];
+    if (isAdmin) {
+        lines.push('', '**Admin commands:**');
+        for (const cmd of ADMIN_COMMANDS) {
+            lines.push(`- \`${cmd}\` — ${ADMIN_COMMAND_DESCRIPTIONS[cmd]}`);
+        }
+    }
+    return lines.join('\n');
 }

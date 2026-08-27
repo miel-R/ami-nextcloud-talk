@@ -6,6 +6,7 @@ env/
 *.log
 *.tsbuildinfo
 uploads/
+data/
 access-control.json
 alert-config.json
 .DS_Store

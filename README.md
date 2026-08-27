@@ -61,14 +61,37 @@ Then just chat — or type `/help`.
 
 ## Commands
 
-Same as the Teams version:
+User commands (work in any approved room):
 
 | Command | What it does |
 |---|---|
-| `/help` | Show the help message |
+| `/help` | Show the help message (admins also see admin commands) |
 | `/status` | Show who Ami is talking to (user + room) and the conversation state |
+| `/whoami` | Show the account Ami recognises you as |
 | `/reset` | Clear conversation history |
 | `/end` (`/exit`, `/quit`) | End the conversation |
+
+Admin commands — only the account in `TALK_ADMIN_USER` may run these, and they
+work even in a room Ami would otherwise ignore:
+
+| Command | What it does |
+|---|---|
+| `/approve` | Approve **this** room so Ami answers here |
+| `/revoke` | Revoke **this** room's approval |
+| `/list` | List every approved room |
+
+## Room approval gate
+
+Ami stays silent in a room until the Nextcloud admin approves it:
+
+1. Enable the bot in the room (room owner → conversation settings → Bots → Ami).
+2. The admin sends `@Ami /approve` in that room.
+3. Ami replies `✅ Room approved` and starts answering.
+
+Until then, every message in the room (including `@Ami` mentions) is ignored.
+Approvals are stored in `data/approved-rooms.json` and persist across container
+rebuilds via the `ami-data` Docker volume. The admin can revoke a room with
+`@Ami /revoke` or see all approved rooms with `@Ami /list`.
 
 ## Configuration
 
@@ -81,6 +104,7 @@ Loaded from `.env` then `env/.env.dev.user` (secrets override). See `.env.exampl
 | `SECRET_TALK_SECRET` | Secret from `talk:bot:install` | — |
 | `TALK_WEBHOOK_PATH` | Webhook route | `/api/talk/webhook` |
 | `TALK_REQUIRE_MENTION` | Require `@Ami` to **start** a conversation; once a session is active, no mention is needed until it expires or ends | `false` |
+| `TALK_ADMIN_USER` | Nextcloud account treated as the bot admin (WebDAV image downloads + `/approve`, `/revoke`, `/list`) | — |
 | `AI_PROVIDER` | `auto` \| `gemini` \| `openai` \| `azure` | `auto` |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `AZURE_*` | AI keys | — |
 | `SENSITIVE_TOPICS` | Extra blocked phrases | built-in list |
@@ -104,6 +128,7 @@ src/
 
   services/                    business logic
     session.service.ts         SessionStore (in-memory, TTL, idle-expiry callback)
+    room-approval.service.ts   RoomApprovalStore (file-backed room approval gate)
     talk.service.ts            TalkAgent: orchestrates a message → reply
     ai.service.ts              AI router (gemini / openai / azure)
     talk/                      Nextcloud Talk transport
@@ -120,7 +145,7 @@ src/
   features/                    fully-contained business domains
     agent/
       prompt.ts                MASTER_SYSTEM_PROMPT + buildSystemPrompt(user)
-      commands.ts              /help, /status, /end, /reset
+      commands.ts              /help, /status, /whoami, /end, /reset + admin commands
     ai/providers/              one file per AI backend
       gemini.ts  openai.ts  azure.ts
 
