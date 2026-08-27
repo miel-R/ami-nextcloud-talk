@@ -64,14 +64,17 @@ export class TalkAgent {
             const history = session.history.slice();
             // Image messages go to the AI as a single turn (multi-turn history
             // makes vision models lose the attached image)
-            const userText = message.trim() || (image ? 'Please analyze this image and describe what you see. If it looks like a technical problem (error dialog, broken device, crash), diagnose it like a help desk agent.' : '');
+            const userText = message.trim() || (image ? 'Please analyze this image and describe what you see. If it looks like a technical problem (error dialog, broken device, crash), diagnose it like a help desk agent and suggest fixes. Offer to file a ticket only if you cannot help — never file one unless the user explicitly asks.' : '');
             history.push({ role: 'user', content: userText });
 
             const systemPrompt = buildSystemPrompt(user.displayName, isNewConversation);
 
             let response = await aiService.callAI(userText, systemPrompt, history, image);
 
-            if (this.needsEscalation(response, message)) {
+            // Image attachments are analyzed and described back to the user; they
+            // must NOT auto-start a ticket. Only escalate for a text request that
+            // explicitly asks for a ticket.
+            if (this.needsEscalation(response, message) && !image) {
                 session.escalation = { step: 'department' };
                 sessionStore.touch(key);
                 return renderMenu(
@@ -79,6 +82,9 @@ export class TalkAgent {
                     getDepartments().map(d => d.label)
                 );
             }
+
+            // Never leak the internal escalation token to the user.
+            response = response.replace(/\[CREATE_TICKET\]/gi, '').trim();
 
             history.push({ role: 'model', content: response });
             session.history = history.slice(-config.maxHistoryTurns * 2);
