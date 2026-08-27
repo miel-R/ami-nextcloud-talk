@@ -232,3 +232,56 @@ Ami now tracks **who** she is talking to, not just the raw message:
 - Run behind HTTPS or keep it on the local network only; anyone who can reach the webhook without the secret cannot forge messages (signature verified when `TALK_SECRET` is set).
 - For production-style run: `npm run build && npm start`, or build the Docker image and run it on the `nextcloud-aio` network (see [`DEPLOYMENT.md`](DEPLOYMENT.md) §4). The recommended production topology is **container-to-container**: Nextcloud → `http://ami-talk-bot:3979` (webhook) and bot → Nextcloud (internal Apache or the public HTTPS URL) — the Funnel/public port is only for external user traffic. Full server deployment (real domain, ports 80/443/3478, Let's Encrypt) is documented in the companion repo's [`SERVER-DEPLOYMENT.md`](https://github.com/miel-R/nextcloud-aio-customs/blob/main/SERVER-DEPLOYMENT.md).
 - To remove the bot later: `occ talk:bot:uninstall <id>` (lists IDs via `occ talk:bot:list`). Reinstalling generates a new bot ID, so re-enable it in each room afterward.
+
+## Changing the Nextcloud domain
+
+`TALK_SERVER_URL` is the base URL the bot uses to call Talk's bot API — posting
+replies, auto-enabling itself in notification rooms, and listing rooms. If it no
+longer matches the domain Nextcloud is served from, replies fail (connection
+refused, TLS error, or 401/404 from Talk). The webhook URL you registered in
+Talk (`http://ami-talk-bot:3979/api/talk/webhook`) is **internal** and does not
+contain your public domain, so a domain change alone does not invalidate it.
+
+### Domain changed, bot stays on the same host/network
+1. Open `env/.env.dev.user` and set `TALK_SERVER_URL=https://your.new.domain`
+   (no trailing slash).
+2. Restart the bot: `docker compose up -d` (or `docker compose restart ami-talk-bot`).
+3. Confirm health: `curl http://localhost:3979/api/health` → `{"status":"healthy",...}`
+   and a test message in an approved room gets a reply.
+4. **Do not** re-run `occ talk:bot:install` — the registered webhook URL and bot
+   ID are unchanged, and existing room enablements, approvals, and notification
+   rooms all keep working.
+
+### AIO moved to a different host/network (full relocation)
+1. Deploy the bot container on the new host, attached to that host's
+   `nextcloud-aio` network (same `docker-compose.yml`, `networks.nextcloud-aio:
+   external: true`).
+2. On the new Nextcloud, register the bot again:
+   `docker exec -u www-data nextcloud-aio-nextcloud php occ talk:bot:install Ami <SECRET> http://ami-talk-bot:3979/api/talk/webhook "Ami Help Desk assistant" --feature webhook --feature response`
+   Note the new **bot ID** — a reinstall always issues a new ID.
+3. Re-enable Ami in every room (UI: conversation settings → Bots → Ami, or
+   `POST /ocs/v2.php/apps/spreed/api/v1/bot/{token}/{botId}` as a moderator).
+4. Set `TALK_SERVER_URL` to the new Nextcloud base URL and restart the bot.
+5. **Approvals & notification rooms:** these persist in `data/approved-rooms.json`
+   and `data/notify-rooms.json` on the `ami-data` volume. If you reuse the same
+   volume, they survive the move; if you start with a fresh volume, re-approve
+   rooms with `$approve` and re-add the Help Desk group with `$notify-add`.
+
+### Secret vs domain
+A domain change does **not** require rotating the bot secret. Only rotate
+`SECRET_TALK_SECRET` if it was compromised — then uninstall the old bot, install
+with the new secret, re-enable rooms, and update `SECRET_TALK_SECRET` + restart.
+
+### Tips & pitfalls
+- **Use the internal URL for reliability:** because the bot is on the
+  `nextcloud-aio` network, you can point `TALK_SERVER_URL` at the internal Apache
+  (`http://nextcloud-aio-apache:11000`) to avoid public TLS entirely. This keeps
+  bot→Nextcloud traffic off the internet while users still reach Nextcloud via
+  the public domain.
+- If replies fail after a domain move, check: (a) `TALK_SERVER_URL` matches the
+  domain Talk is served from and has a valid cert; (b) the bot container can
+  resolve/reach that URL (DNS + network); (c) the registered webhook URL is still
+  reachable from Nextcloud
+  (`docker exec nextcloud-aio-nextcloud curl -s -o /dev/null -w "%{http_code}\n" http://ami-talk-bot:3979/api/health` → 200).
+- See [`DEPLOYMENT.md`](DEPLOYMENT.md) §7 Maintenance ("Move to a different URL/host")
+  for the canonical bot-move procedure.
