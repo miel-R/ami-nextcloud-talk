@@ -8,6 +8,14 @@ export function isEndCommand(message: string): boolean {
     return END_COMMANDS.includes(message);
 }
 
+/** Natural-language sign-offs that should close the conversation immediately
+ *  (so the idle farewell isn't sent later). Covers EN + Tagalog closings. */
+const CLOSING_RE = /\b(bye|good ?bye|thanks|thank you|thx|salamat|done|finished|wala na|ayos na|ok na|okey na|that'?s all|all set|all good)\b/i;
+
+export function isClosingMessage(message: string): boolean {
+    return CLOSING_RE.test(message.toLowerCase());
+}
+
 /** Commands any approved user can run. */
 export const USER_COMMANDS = ['$help', '$status', '$whoami', '$reset', '$end'];
 

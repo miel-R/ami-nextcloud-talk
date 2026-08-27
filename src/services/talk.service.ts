@@ -3,7 +3,7 @@ import { config } from '../config/config.service';
 import { logger } from '../core/logger';
 import { sessionStore, sessionKey } from './session.service';
 import { buildSystemPrompt } from '../features/agent/prompt';
-import { helpMessage, isEndCommand } from '../features/agent/commands';
+import { helpMessage, isEndCommand, isClosingMessage } from '../features/agent/commands';
 import { User } from '../models/user.model';
 import { Session } from '../models/session.model';
 import { ImageData } from '../models/message.model';
@@ -90,6 +90,12 @@ export class TalkAgent {
             session.history = history.slice(-config.maxHistoryTurns * 2);
             sessionStore.touch(key);
 
+            // A clear sign-off ("wala na", "bye", "thanks", …) closes the
+            // conversation now, so the idle farewell isn't sent later.
+            if (isClosingMessage(message)) {
+                sessionStore.delete(key);
+            }
+
             return response;
         } catch (error) {
             logger.error('Error processing Talk message:', error);
@@ -109,12 +115,10 @@ export class TalkAgent {
         const esc = session.escalation!;
 
         // Let the user bail out of the intake at any point.
-        if (/^\/cancel$/i.test(message) || isEndCommand(message)) {
+        if (/^\/cancel$/i.test(message) || isEndCommand(message) || isClosingMessage(message)) {
             session.escalation = undefined;
-            sessionStore.touch(session.key);
-            return isEndCommand(message)
-                ? "👋 Okay, I've cancelled the request. If you need anything else, just ask!"
-                : '❌ Escalation cancelled. How else can I help?';
+            sessionStore.delete(session.key);
+            return "👋 Okay, I've closed this request. If you need anything else, just ask!";
         }
 
         switch (esc.step) {
