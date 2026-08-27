@@ -363,7 +363,7 @@ Symptom-driven matrix. Every row was actually hit and confirmed during deploymen
 | Symptom | Root cause | Fix |
 |---|---|---|
 | Bot registered & enabled but **never receives anything**; `error_count` stays 0; nothing in bot logs | Registered **without `--feature webhook`** — Talk filters it out before delivery | Reinstall with `--feature webhook --feature response` (section 3.3/3.4) |
-| Webhook arrives, AI responds, but reply fails with **401** | Signed the wrong data — the reply signature covers `random + message text`, **not** the JSON body | Fixed in `src/talk/client.ts`; sign the message string only |
+| Webhook arrives, AI responds, but reply fails with **401** | Signed the wrong data — the reply signature covers `random + message text`, **not** the JSON body | Fixed in `src/services/talk/talk-client.service.ts`; sign the message string only |
 | Reply fails with **404 / OCS statuscode 998** | Old-style URL `/bot/{SECRET}/message`; Talk ≥17 wants `/bot/{ROOM_TOKEN}/message`. Also: URL-path segments are limited to `[a-z0-9]{4,30}` — a >30-char secret in the URL never matches a route | Use the room token in the path; keep the secret out of URLs entirely (headers carry auth) |
 | `occ talk:bot:install` rejects the secret | Must be **40–128 characters** | Generate 20+ random bytes hex (`openssl rand -hex 20`) |
 | `POST /ocs/.../bots/{id}` returns 404 when enabling per-room | Wrong API version or missing moderator rights | Use `/api/v1/bot/{token}/{botId}`; promote the user first (`occ talk:room:promote`) |
