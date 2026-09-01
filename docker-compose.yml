@@ -8,6 +8,7 @@ services:
     env_file: env/.env.dev.user
     volumes:
       - ami-data:/app/data
+      - nextcloud-aio_nextcloud:/var/www/html:ro
 
 # Attach to the stock Nextcloud network so Nextcloud can reach us by name
 networks:
@@ -17,3 +18,5 @@ networks:
 # Persists approved-room approvals across container rebuilds
 volumes:
   ami-data:
+  nextcloud-aio_nextcloud:
+    external: true

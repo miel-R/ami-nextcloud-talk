@@ -1,4 +1,6 @@
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { config } from '../../config/config.service';
 import { logger } from '../../core/logger';
 import { FileParameter, ImageAttachment } from '../../models/webhook.model';
@@ -39,9 +41,48 @@ export async function downloadTalkImage(file: FileParameter, actorId?: string): 
                 result = await downloadViaWebdavForUser(file, senderId, config.talkAdminPassword, true);
             }
         }
-        if (!result && config.talkAdminUser && config.talkAdminPassword) {
-            result = await downloadViaWebdav(file);
+    if (!result && config.talkAdminUser && config.talkAdminPassword) {
+        result = await downloadViaWebdav(file);
+    }
+
+    if (!result) {
+        // Direct filesystem fallback — bot and Nextcloud share nextcloud-aio_nextcloud volume at /var/www/html:ro
+        // Try exact paths first, then recursive search by filename (Talk shares are often in Talk/<room>/<file>)
+        const senderId = actorId ? actorId.replace(/^users\//, '') : '';
+        const tryUsers = [senderId, config.talkAdminUser].filter(Boolean) as string[];
+        const candidates = [file.path || '', `Talk/${file.name}`].filter(Boolean) as string[];
+        for (const uid of tryUsers) {
+            for (const cand of candidates) {
+                const fsPath = path.join('/var/www/html/data', uid, 'files', cand.replace(/^\/+/, ''));
+                try {
+                    if (fs.existsSync(fsPath) && fs.statSync(fsPath).isFile()) {
+                        const buffer = fs.readFileSync(fsPath);
+                        if (buffer.length > maxSizeBytes) {
+                            logger.warn(`⚠️ Image "${file.name}" at ${fsPath} exceeds ${config.maxImageSizeMB} MB`);
+                            continue;
+                        }
+                        const mimeType = sanitizeMime(file.mimetype || 'image/png');
+                        if (!IMAGE_MIME_TYPES.some(t => mimeType.startsWith(t))) continue;
+                        logger.info(`📸 Downloaded image "${file.name}" via filesystem ${fsPath} (${buffer.length} bytes)`);
+                        return { mimeType, base64Data: buffer.toString('base64'), fileName: file.name };
+                    }
+                } catch {}
+            }
+            // Recursive search by filename in the user's files (handles Talk/<room>/... deep paths)
+            try {
+                const baseDir = path.join('/var/www/html/data', uid, 'files');
+                const found = findFileByName(baseDir, file.name);
+                if (found) {
+                    const buffer = fs.readFileSync(found);
+                    if (buffer.length > maxSizeBytes) continue;
+                    const mimeType = sanitizeMime(file.mimetype || 'image/png');
+                    if (!IMAGE_MIME_TYPES.some(t => mimeType.startsWith(t))) continue;
+                    logger.info(`📸 Downloaded image "${file.name}" via filesystem search ${found}`);
+                    return { mimeType, base64Data: buffer.toString('base64'), fileName: file.name };
+                }
+            } catch {}
         }
+    }
     }
 
     if (result) {
@@ -122,6 +163,21 @@ function toAttachment(file: FileParameter, res: { headers: Record<string, unknow
         return null;
     }
     return { mimeType, base64Data: buffer.toString('base64'), fileName: file.name };
+}
+
+function findFileByName(dir: string, name: string): string | null {
+    try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const e of entries) {
+            const full = path.join(dir, e.name);
+            if (e.isFile() && e.name === name) return full;
+            if (e.isDirectory()) {
+                const found = findFileByName(full, name);
+                if (found) return found;
+            }
+        }
+    } catch {}
+    return null;
 }
 
 function sanitizeMime(mime: string): string {
