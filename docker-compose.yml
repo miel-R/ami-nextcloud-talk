@@ -4,14 +4,14 @@ services:
     container_name: ami-talk-bot
     restart: unless-stopped
     networks:
-      - nextcloud-net
+      - nextcloud-stock_nextcloud-net
     env_file: env/.env.dev.user
     volumes:
       - ami-data:/app/data
 
 # Attach to the stock Nextcloud network so Nextcloud can reach us by name
 networks:
-  nextcloud-net:
+  nextcloud-stock_nextcloud-net:
     external: true
 
 # Persists approved-room approvals across container rebuilds
