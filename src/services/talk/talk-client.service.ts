@@ -125,11 +125,13 @@ export async function isUserAdmin(userId: string): Promise<boolean> {
             headers: { 'OCS-APIRequest': 'true', Accept: 'application/json' },
             timeout: 8000
         });
-        const groups: string[] = res.data?.ocs?.data?.groups || res.data?.ocs?.data?.group || [];
-        // also handle `subadmin` etc. — but `groups` is the canonical list
-        const lower = groups.map(g => String(g).toLowerCase());
-        if (lower.includes('admin')) return true;
-        // Fallback: check displayName-based groups or `backend`?
+        const data = res.data?.ocs?.data || {};
+        const groups: string[] = data.groups || data.group || [];
+        const subadmin: string[] = data.subadmin || [];
+        const lowerGroups = groups.map(g => String(g).toLowerCase());
+        if (lowerGroups.includes('admin')) return true;
+        // Group-admin (subadmin of any group) — e.g. helpdesk-admin of a Talk group
+        if (subadmin.length > 0) return true;
         return false;
     } catch (e: any) {
         // 404 = user not found, 403 = provisioning API disabled — just log and fall back to static list
