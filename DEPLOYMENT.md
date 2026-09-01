@@ -5,7 +5,7 @@ the Nextcloud/Talk side, the bot container, production deploy on the same host,
 development deploys behind an ngrok tunnel, troubleshooting, and maintenance.
 
 > Quick-start lives in [README.md](README.md). This document is the full reference.
-> Everything here was verified against **Nextcloud AIO 13.5 / Nextcloud 34 / Nextcloud Talk 24.0.4** running on Docker Desktop for Windows 11.
+> Everything here was verified against **stock Nextcloud (`nextcloud:stable`) + Postgres + Talk HPB** running on Docker Desktop for Windows 11.
 
 ---
 
@@ -14,7 +14,7 @@ development deploys behind an ngrok tunnel, troubleshooting, and maintenance.
 1. [Architecture](#1-architecture)
 2. [Prerequisites](#2-prerequisites)
 3. [Nextcloud Talk setup](#3-nextcloud-talk-setup)
-4. [Bot deployment — production (container beside AIO)](#4-bot-deployment--production-container-beside-aio)
+4. [Bot deployment — production (container on stock network)](#4-bot-deployment--production-container-on-stock-network)
 5. [Development deploy behind ngrok](#5-development-deploy-behind-ngrok)
 6. [Troubleshooting](#6-troubleshooting)
 7. [Maintenance](#7-maintenance)
@@ -26,10 +26,10 @@ development deploys behind an ngrok tunnel, troubleshooting, and maintenance.
 ```
 ┌───────────────────────────── Docker host ──────────────────────────────┐
 │                                                                        │
-│  ┌─────────────────── nextcloud-aio network ───────────────────────┐   │
+│  ┌─────────────────── nextcloud network ───────────────────────┐   │
 │  │                                                                 │   │
 │  │  ┌────────────────┐   webhook (HMAC-signed)   ┌──────────────┐  │   │
-│  │  │ nextcloud-aio- │ ─────────────────────────► │ ami-talk-bot │  │   │
+│  │  │ nextcloud      │ ─────────────────────────► │ ami-talk-bot │  │   │
 │  │  │ nextcloud      │   POST http://ami-talk-    │ (Node/TS     │  │   │
 │  │  │ (Talk app)     │◄────────────────────────── │  Express)    │  │   │
 │  │  └────────────────┘   signed OCS reply         └──────┬───────┘  │   │
@@ -72,11 +72,11 @@ development deploys behind an ngrok tunnel, troubleshooting, and maintenance.
 | Requirement | Details |
 |---|---|
 | Nextcloud | Any instance with the **Talk** app enabled. Webhook bots need capability `bots-v1` (Nextcloud 27.1+ / Talk 17.1+). |
-| occ access | Ability to run `docker exec -u www-data nextcloud-aio-nextcloud php occ ...` (or shell access to your Nextcloud). |
+| occ access | Ability to run `docker exec -u www-data nextcloud php occ ...` (or shell access to your Nextcloud). |
 | Moderator rights | Enabling a bot in a room requires the room owner/moderator (UI) or their credentials (API). |
 | Docker + Compose | For containerized deployment of the bot. Node.js 22 works too if you prefer bare-metal. |
 | AI API key | One of: `GEMINI_API_KEY`, `OPENAI_API_KEY`, or Azure OpenAI endpoint + key + deployment. No key = bot runs but answers with a "no AI configured" notice. |
-| Network reachability | The **Nextcloud container must be able to reach the bot URL**, and the **bot must be able to reach Nextcloud over HTTPS**. On the same Docker host this is handled by joining the `nextcloud-aio` network (bot side) and publishing port 443 (Nextcloud side). |
+| Network reachability | The **Nextcloud container must be able to reach the bot URL**, and the **bot must be able to reach Nextcloud over HTTPS**. On the same Docker host this is handled by joining the `nextcloud-net` network (bot side) and publishing port 443 (Nextcloud side). |
 
 Optional but recommended:
 
@@ -84,7 +84,7 @@ Optional but recommended:
 |---|---|
 | ngrok account + authtoken | Only needed for the development-tunnel deployments in section 5. Free tier is sufficient for testing. |
 
-> **AppAPI note:** AppAPI (`app_api`) ships installed-but-disabled in AIO. It is **not required** for webhook bots — it only matters for ExApps (external Nextcloud apps). Enable it if your Admin panel complains or if you plan to install ExApps: `occ app:enable app_api`.
+> **AppAPI note:** AppAPI (`app_api`) ships installed-but-disabled in some images. It is **not required** for webhook bots — it only matters for ExApps (external Nextcloud apps). Enable it if your Admin panel complains or if you plan to install ExApps: `occ app:enable app_api`.
 
 ---
 
@@ -95,12 +95,12 @@ Skip any step that is already done on your instance.
 ### 3.1 Verify Talk is healthy
 
 ```bash
-# AIO: the Talk high-performance backend container should be up and healthy
-docker ps --filter name=nextcloud-aio-talk --format "{{.Names}}: {{.Status}}"
+# Stock: the Talk high-performance backend container should be up and healthy
+docker ps --filter name=nextcloud     talk --format "{{.Names}}: {{.Status}}"
 
 # Confirm the spreed (Talk) app version and that it is enabled
-docker exec nextcloud-aio-nextcloud php occ config:app:get spreed installed_version
-docker exec nextcloud-aio-nextcloud php occ config:app:get spreed enabled   # → "yes"
+docker exec nextcloud php occ config:app:get spreed installed_version
+docker exec nextcloud php occ config:app:get spreed enabled   # → "yes"
 ```
 
 ### 3.2 Create a conversation for the bot
@@ -111,13 +111,13 @@ docker exec nextcloud-aio-nextcloud php occ config:app:get spreed enabled   # �
 **Option B — occ:**
 
 ```bash
-docker exec -u www-data nextcloud-aio-nextcloud php occ talk:room:create "Ami Help Desk" --user admin --user test1
+docker exec -u www-data nextcloud php occ talk:room:create "Ami Help Desk" --user admin --user test1
 ```
 
 If the users end up as plain participants instead of moderators (needed to manage bots), promote them:
 
 ```bash
-docker exec nextcloud-aio-nextcloud php occ talk:room:promote kntczu8k admin test1
+docker exec nextcloud php occ talk:room:promote kntczu8k admin test1
 ```
 
 ### 3.3 Understand bot feature flags
@@ -153,7 +153,7 @@ $bytes = New-Object byte[] 20; [Security.Cryptography.RandomNumberGenerator]::Cr
 Register (choose the URL matching your deployment — see section 4 or 5):
 
 ```bash
-docker exec -u www-data nextcloud-aio-nextcloud php occ talk:bot:install \
+docker exec -u www-data nextcloud php occ talk:bot:install \
     Ami \
     <SECRET> \
     http://ami-talk-bot:3979/api/talk/webhook \
@@ -165,8 +165,8 @@ docker exec -u www-data nextcloud-aio-nextcloud php occ talk:bot:install \
 Manage registrations:
 
 ```bash
-docker exec nextcloud-aio-nextcloud php occ talk:bot:list        # shows ID, state, features, error_count
-docker exec nextcloud-aio-nextcloud php occ talk:bot:uninstall <id>
+docker exec nextcloud php occ talk:bot:list        # shows ID, state, features, error_count
+docker exec nextcloud php occ talk:bot:uninstall <id>
 ```
 
 `error_count` in `talk:bot:list` increments when Talk delivers a webhook and gets an unexpected HTTP status back — `0` with a silent bot means **delivery never happened** (usually the feature-flag trap above), while a growing count points at the bot being down or replying non-2xx.
@@ -174,7 +174,7 @@ docker exec nextcloud-aio-nextcloud php occ talk:bot:uninstall <id>
 You can also sanity-check the route exists on your Talk version (should print the `ocs.spreed.bot.sendmessage` table):
 
 ```bash
-docker exec nextcloud-aio-nextcloud php occ router:match --method POST "/ocs/v2.php/apps/spreed/api/v1/bot/abcdef123456/message"
+docker exec nextcloud php occ router:match --method POST "/ocs/v2.php/apps/spreed/api/v1/bot/abcdef123456/message"
 ```
 
 ### 3.5 Enable the bot per conversation
@@ -201,9 +201,9 @@ Notes:
 
 ---
 
-## 4. Bot deployment — production (container beside AIO)
+## 4. Bot deployment — production (container on stock network)
 
-This is the proven setup: the bot runs as a Docker container attached to AIO's existing Docker network, so Nextcloud reaches it by container name and no ports are exposed publicly.
+This is the proven setup: the bot runs as a Docker container attached to the stock Nextcloud Docker network, so Nextcloud reaches it by container name and no ports are exposed publicly.
 
 ### 4.1 Configure environment
 
@@ -224,7 +224,7 @@ Create `env/.env.dev.user` (git-ignored) from `.env.example` and fill in:
 
 ### 4.2 Build and run
 
-`docker-compose.yml` (already in this repo) attaches the bot to AIO's network:
+`docker-compose.yml` (already in this repo) attaches the bot to the stock network:
 
 ```yaml
 services:
@@ -233,11 +233,11 @@ services:
     container_name: ami-talk-bot
     restart: unless-stopped
     networks:
-      - nextcloud-aio
+      - nextcloud-net
     env_file: env/.env.dev.user
 
 networks:
-  nextcloud-aio:
+  nextcloud-net:
     external: true
 ```
 
@@ -249,14 +249,14 @@ curl http://localhost:3979/api/health        # → {"status":"healthy","talkConf
 docker logs ami-talk-bot --tail 20
 ```
 
-Because the container joins the `nextcloud-aio` network, Nextcloud reaches it at
+Because the container joins the `nextcloud-net` network, Nextcloud reaches it at
 `http://ami-talk-bot:3979` — this exact URL is what you pass to `talk:bot:install`
 (section 3.4). No public port exposure needed.
 
 Verify reachability from Nextcloud's perspective:
 
 ```bash
-docker exec nextcloud-aio-nextcloud curl -s -o /dev/null -w "%{http_code}\n" http://ami-talk-bot:3979/api/health
+docker exec nextcloud curl -s -o /dev/null -w "%{http_code}\n" http://ami-talk-bot:3979/api/health
 # → 200
 ```
 
@@ -296,7 +296,7 @@ Note the forwarding URL, e.g. `https://unmoving-ogle-survival.ngrok-free.dev`.
 **Step 3 — register that URL as the bot:**
 
 ```bash
-docker exec -u www-data nextcloud-aio-nextcloud php occ talk:bot:install \
+docker exec -u www-data nextcloud php occ talk:bot:install \
     AmiDev <SECRET> \
     https://unmoving-ogle-survival.ngrok-free.dev/api/talk/webhook \
     "Ami Help Desk assistant" \
@@ -314,11 +314,11 @@ Talk → ngrok edge → your PC.
 
 **Switching back:** uninstall the dev bot (`occ talk:bot:uninstall <id>`), re-enable the production one.
 
-### 5.2 Scenario B2 — tunneling the whole local AIO stack with ngrok
+### 5.2 Scenario B2 — tunneling the whole local stack with ngrok
 
-Use this when **everything runs locally** (AIO on your PC behind a corporate network with no open ports) and you want to reach Nextcloud itself from outside. This mirrors the working setup from the AIO session.
+Use this when **everything runs locally** (Nextcloud on your PC behind a corporate network with no open ports) and you want to reach Nextcloud itself from outside. This mirrors the working setup from the AIO session.
 
-Add an ngrok service to the **AIO compose file** (the one containing `nextcloud-aio-mastercontainer`):
+Add an ngrok service to the **stock compose.yaml** (the one containing `nextcloud`):
 
 ```yaml
   ngrok:
@@ -333,7 +333,7 @@ Add an ngrok service to the **AIO compose file** (the one containing `nextcloud-
 
 Hard-won details baked into that command:
 
-- **`https://host.docker.internal:8080`** — the AIO interface on 8080 is HTTPS-only. Plain `http 8080` fails with *"Client sent an HTTP request to an HTTPS server"*; upstream TLS verification is off by default so the self-signed cert is fine.
+- **`https://host.docker.internal:8080`** — the Nextcloud app on 8080 is HTTPS-only. Plain `http 8080` fails with *"Client sent an HTTP request to an HTTPS server"*; upstream TLS verification is off by default so the self-signed cert is fine.
 - **`--host-header=localhost:8080`** — the AIO interface validates the Host header against its configured URL; rewriting keeps it happy.
 - Put `NGROK_AUTHTOKEN=...` in a `.env` next to that compose file — env vars set in your shell are **not** reliably picked up by Compose on Windows.
 
@@ -345,14 +345,14 @@ curl.exe -sk -H "ngrok-skip-browser-warning: true" -L -o NUL -w "%{http_code}`n"
 ```
 
 **Bot placement in this scenario:** keep using the section-4 containerized bot —
-both AIO and the bot stay local, so the bot URL remains
+both Nextcloud and the bot stay local, so the bot URL remains
 `http://ami-talk-bot:3979/api/talk/webhook`. ngrok here only exposes the
 *interfaces*, not the bot. If you additionally want remote users to chat with
 Ami through the tunnel, also tunnel port 443 (Caddy) and remember Talk's webhooks
 stay internal regardless.
 
 > 📦 The ready-made ngrok compose block used in our deployment lives in the companion repo
-> [`nextcloud-aio-customs`](https://github.com/miel-R/nextcloud-aio-customs).
+> [`nextcloud     customs`](https://github.com/miel-R/nextcloud     customs).
 
 ---
 
@@ -379,14 +379,14 @@ Diagnostic quick-reference:
 
 ```bash
 # Is the bot registered, with which features? error_count?
-docker exec nextcloud-aio-nextcloud php occ talk:bot:list
+docker exec nextcloud php occ talk:bot:list
 
 # Is the bot linked to THIS room?
-docker exec nextcloud-aio-database psql -U nextcloud -d nextcloud_database \
+docker exec nextcloud     database psql -U nextcloud -d nextcloud_database \
     -c "SELECT * FROM oc_talk_bots_conversation WHERE token='<ROOM_TOKEN>';"
 
 # Did Talk attempt delivery? (look for 'Bot' errors)
-docker exec nextcloud-aio-nextcloud sh -c 'grep -i bot /var/www/html/data/nextcloud.log | tail -5'
+docker exec nextcloud sh -c 'grep -i bot /var/www/html/data/nextcloud.log | tail -5'
 
 # What did the bot see?
 docker logs ami-talk-bot --since 10m
