@@ -15,7 +15,7 @@ const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 
  *    user's `Talk/` folder, so we fetch `remote.php/dav/files/<admin>/<path>`
  *    with basic auth. Requires TALK_ADMIN_USER + SECRET_TALK_ADMIN_PASSWORD.
  */
-export async function downloadTalkImage(file: FileParameter): Promise<ImageAttachment | null> {
+export async function downloadTalkImage(file: FileParameter, actorId?: string): Promise<ImageAttachment | null> {
     const maxSizeBytes = config.maxImageSizeMB * 1024 * 1024;
     if (file.size && parseInt(file.size, 10) > maxSizeBytes) {
         logger.warn(`⚠️ Image "${file.name}" is ${file.size} bytes — exceeds ${config.maxImageSizeMB} MB limit.`);
@@ -28,8 +28,20 @@ export async function downloadTalkImage(file: FileParameter): Promise<ImageAttac
         result = await downloadViaPublicShare(file);
     }
 
-    if (!result && config.talkAdminUser && config.talkAdminPassword) {
-        result = await downloadViaWebdav(file);
+    if (!result) {
+        // Try the sender's storage first (Talk shares are in the sender's files), then admin fallback
+        const senderId = actorId ? actorId.replace(/^users\//, '') : '';
+        if (senderId) {
+            result = await downloadViaWebdavForUser(file, senderId, config.talkAdminPassword ? undefined : undefined);
+            // Use sender's password? We don't have it — try admin creds for sender's storage (works if admin is member, or use sender's own auth if we had it)
+            // Instead, try WebDAV with admin creds but sender's path prefix
+            if (!result && config.talkAdminUser && config.talkAdminPassword) {
+                result = await downloadViaWebdavForUser(file, senderId, config.talkAdminPassword, true);
+            }
+        }
+        if (!result && config.talkAdminUser && config.talkAdminPassword) {
+            result = await downloadViaWebdav(file);
+        }
     }
 
     if (result) {
@@ -50,6 +62,28 @@ async function downloadViaPublicShare(file: FileParameter): Promise<ImageAttachm
         logger.warn(`⚠️ Public-share download failed for "${file.name}": ${error.response?.status || error.message}`);
         return null;
     }
+}
+
+async function downloadViaWebdavForUser(file: FileParameter, userId: string, password?: string, useAdminAuth = false): Promise<ImageAttachment | null> {
+    if (!file.path) return null;
+    const authUser = useAdminAuth ? config.talkAdminUser : userId;
+    const authPass = useAdminAuth ? config.talkAdminPassword : (password || config.talkAdminPassword);
+    if (!authUser || !authPass) return null;
+    const candidates = [file.path, `Talk/${file.name}`];
+    for (const candidate of candidates) {
+        const url = `${config.talkServerUrl}/remote.php/dav/files/${encodeURIComponent(userId)}/${encodeURI(candidate.replace(/^\/+/, ''))}`;
+        try {
+            const res = await axios.get(url, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+                headers: { Authorization: basicAuth(authUser, authPass) }
+            });
+            return toAttachment(file, res);
+        } catch (error: any) {
+            logger.warn(`⚠️ WebDAV download failed for ${userId}/${candidate}: ${error.response?.status || error.message}`);
+        }
+    }
+    return null;
 }
 
 async function downloadViaWebdav(file: FileParameter): Promise<ImageAttachment | null> {

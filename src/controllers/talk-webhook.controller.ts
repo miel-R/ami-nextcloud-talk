@@ -214,7 +214,7 @@ export function registerTalkWebhook(app: express.Express): void {
         try {
             let image: ImageData | undefined;
             if (imageParam) {
-                image = await downloadTalkImage(imageParam) || undefined;
+                image = await downloadTalkImage(imageParam, actorId) || undefined;
                 if (!image) {
                     await sendTalkMessage(roomToken, `⚠️ Sorry ${user.displayName || ''}, I couldn't download "${imageParam.name}" so I can't analyze it. Try re-sharing the image.`, messageId);
                     return;
