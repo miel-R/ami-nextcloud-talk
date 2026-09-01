@@ -105,6 +105,40 @@ export async function enableBotInRoom(roomToken: string, botId: string): Promise
 }
 
 /**
+ * Returns true if `userId` is a Nextcloud **admin** (member of the `admin` group)
+ * via the provisioning API, or is in the static `TALK_ADMIN_USER` list.
+ * Lets you create a group-admin account (e.g. `helpdesk-admin` in `admin` group)
+ * without having to list every admin in the env.
+ */
+export async function isUserAdmin(userId: string): Promise<boolean> {
+    // 1) static list (comma-separated TALK_ADMIN_USER) — fastest
+    if (config.talkAdminUser) {
+        const admins = config.talkAdminUser.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        if (admins.includes(userId.toLowerCase())) return true;
+    }
+    // 2) provisioning API: is the user in the `admin` group?
+    if (!config.talkServerUrl || !config.talkAdminUser || !config.talkAdminPassword) return false;
+    try {
+        const url = `${config.talkServerUrl}/ocs/v2.php/cloud/users/${encodeURIComponent(userId)}`;
+        const res = await axios.get(url, {
+            auth: { username: config.talkAdminUser, password: config.talkAdminPassword },
+            headers: { 'OCS-APIRequest': 'true', Accept: 'application/json' },
+            timeout: 8000
+        });
+        const groups: string[] = res.data?.ocs?.data?.groups || res.data?.ocs?.data?.group || [];
+        // also handle `subadmin` etc. — but `groups` is the canonical list
+        const lower = groups.map(g => String(g).toLowerCase());
+        if (lower.includes('admin')) return true;
+        // Fallback: check displayName-based groups or `backend`?
+        return false;
+    } catch (e: any) {
+        // 404 = user not found, 403 = provisioning API disabled — just log and fall back to static list
+        logger.warn(`⚠️ Could not check admin groups for ${userId} (${e?.response?.status || e.message})`);
+        return false;
+    }
+}
+
+/**
  * Returns true when the configured admin account is an **owner or moderator** of
  * the given room. Used to decide whether enabling the bot auto-approves the room
  * (admin-managed) or only posts a "ask an admin to authorize" notice (a normal

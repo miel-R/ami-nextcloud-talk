@@ -12,7 +12,8 @@ import { sessionStore } from '../services/session.service';
 import { roomApprovalStore } from '../services/room-approval.service';
 import { notificationStore } from '../services/notification.service';
 import { enableBotInRoom, sendTalkMessageStatus } from '../services/talk/talk-client.service';
-import { ADMIN_COMMANDS, isAdminUser, adminList } from '../features/agent/commands';
+import { ADMIN_COMMANDS, adminList } from '../features/agent/commands';
+import { isUserAdmin } from '../services/talk/talk-client.service';
 
 type WebhookRequest = express.Request & { rawBody?: Buffer };
 
@@ -112,7 +113,7 @@ export function registerTalkWebhook(app: express.Express): void {
         }
 
         const user = fromActor(hook.actor);
-        const isAdmin = isAdminUser(user);
+        const isAdmin = await isUserAdmin(user.id);
         logger.info(`📨 Room ${roomToken} | ${user.displayName || actorId}: "${text.substring(0, 80)}"${imageParam ? ` 📸 [${imageParam.name}]` : ''}`);
 
         // ── Admin commands ──────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ export function registerTalkWebhook(app: express.Express): void {
 
         // ── Public query (works even in unapproved rooms, no session needed) ─
         if (text === '$admin' || text === '$admins' || text === '$refresh') {
-            const isAdmin = isAdminUser(user);
+            const isAdmin = await isUserAdmin(user.id);
             await sendTalkMessage(roomToken, `👑 Nextcloud admin(s): **${adminList()}**${isAdmin ? ' — you are an admin.' : ' — ask one of them to join this room and send \`ami $approve\` to authorize it.'}`, messageId);
             return;
         }
