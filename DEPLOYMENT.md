@@ -316,7 +316,7 @@ Talk → ngrok edge → your PC.
 
 ### 5.2 Scenario B2 — tunneling the whole local stack with ngrok
 
-Use this when **everything runs locally** (Nextcloud on your PC behind a corporate network with no open ports) and you want to reach Nextcloud itself from outside. This mirrors the working setup from the AIO session.
+Use this when **everything runs locally** (Nextcloud on your PC behind a corporate network with no open ports) and you want to reach Nextcloud itself from outside. This mirrors the working setup from the stock session.
 
 Add an ngrok service to the **stock compose.yaml** (the one containing `nextcloud`):
 
@@ -334,7 +334,7 @@ Add an ngrok service to the **stock compose.yaml** (the one containing `nextclou
 Hard-won details baked into that command:
 
 - **`https://host.docker.internal:8080`** — the Nextcloud app on 8080 is HTTPS-only. Plain `http 8080` fails with *"Client sent an HTTP request to an HTTPS server"*; upstream TLS verification is off by default so the self-signed cert is fine.
-- **`--host-header=localhost:8080`** — the AIO interface validates the Host header against its configured URL; rewriting keeps it happy.
+- **`--host-header=localhost:8080`** — the Nextcloud interface validates the Host header against its configured URL; rewriting keeps it happy.
 - Put `NGROK_AUTHTOKEN=...` in a `.env` next to that compose file — env vars set in your shell are **not** reliably picked up by Compose on Windows.
 
 Find your current tunnel URL and test through it:
