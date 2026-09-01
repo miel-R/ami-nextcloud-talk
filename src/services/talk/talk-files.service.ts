@@ -47,7 +47,7 @@ export async function downloadTalkImage(file: FileParameter, actorId?: string): 
     if (result) {
         logger.info(`📸 Downloaded image "${file.name}" (${result.base64Data.length} b64 chars, ${result.mimeType})`);
     } else {
-        logger.error(`❌ Could not download image "${file.name}" (no public share link${config.talkAdminUser ? '' : ' and no admin credentials configured'})`);
+        logger.error(`❌ Could not download image "${file.name}" (path="${file.path}", link="${file.link}", mimetype="${file.mimetype}") (no public share link${config.talkAdminUser ? '' : ' and no admin credentials configured'})`);
     }
     return result;
 }
