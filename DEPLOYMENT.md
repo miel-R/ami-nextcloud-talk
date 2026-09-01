@@ -371,7 +371,7 @@ Symptom-driven matrix. Every row was actually hit and confirmed during deploymen
 | Bot replies but the message never appears in the room | Signature mismatch → Talk throttles/rejects silently after failures; watch for `error_count` spikes and 429 | Verify header names (`X-Nextcloud-Talk-Bot-Random/-Signature`), random ≥32 chars, lowercase-hex signature, exact secret match |
 | Container logs show nothing at all after posting | Webhook never dispatched (see row 1) or bot unreachable | From inside Nextcloud: `curl http://<bot-host>:3979/api/health` — must return 200 |
 | **Windows/Docker Desktop:** Nextcloud containers resolve your domain to `127.0.0.1` and connections fail instantly (cURL error 7) | Docker Desktop forwards container DNS through the Windows resolver, which honors the hosts file; a hosts entry like `127.0.0.1 cloud.example.com` leaks into every container | Point the hosts entry at the host's LAN IP instead of `127.0.0.1`, or remove it; no container restart needed (DNS is re-resolved) |
-| Admin panel warns about AppAPI / ExApps unavailable | `app_api` installed but disabled (AIO default) | `occ app:enable app_api` — optional for webhook bots, required for ExApps |
+| Admin panel warns about AppAPI / ExApps unavailable | `app_api` installed but disabled (stock default) | `occ app:enable app_api` — optional for webhook bots, required for ExApps |
 | Bot worked, then stopped after a server change | Bot uninstalled/reinstalled → **new bot ID** → per-room enablement lost | Re-enable in each room after reinstalling (section 3.5) |
 | ngrok tunnel dead after restart | Free-tier URLs rotate every restart | Grab new URL from `http://localhost:4040/api/tunnels` and update the bot registration, or claim a free static domain |
 
@@ -409,4 +409,4 @@ docker logs ami-talk-bot --since 10m
 
 ---
 
-*Last verified: 2026-08-26 — Nextcloud AIO 13.5 · Nextcloud 34 · Talk 24.0.4 · bot commit with AS2 parser + signed reply client.*
+*Last verified: 2026-09-01 — stock Nextcloud 34 · Talk 24.0.4 · bot commit with AS2 parser + signed reply client.*
