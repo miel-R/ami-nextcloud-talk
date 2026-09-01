@@ -3,7 +3,7 @@ import { config } from '../config/config.service';
 import { logger } from '../core/logger';
 import { sessionStore, sessionKey } from './session.service';
 import { buildSystemPrompt } from '../features/agent/prompt';
-import { helpMessage, isEndCommand, isClosingMessage } from '../features/agent/commands';
+import { helpMessage, isEndCommand, isClosingMessage, adminList } from '../features/agent/commands';
 import { User } from '../models/user.model';
 import { Session } from '../models/session.model';
 import { ImageData } from '../models/message.model';
@@ -45,6 +45,9 @@ export class TalkAgent {
             }
             if (message === '$status') {
                 return sessionStore.describe(key);
+            }
+            if (message === '$admin' || message === '$refresh') {
+                return `👑 Nextcloud admin(s): **${adminList()}**${isAdmin ? ' — you are an admin.' : ' — ask one of them to join this room and send `ami $approve` to authorize it.'}`;
             }
 
             if (!this.checkRateLimit(key)) {

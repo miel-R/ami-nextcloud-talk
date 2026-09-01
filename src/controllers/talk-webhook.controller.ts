@@ -12,7 +12,7 @@ import { sessionStore } from '../services/session.service';
 import { roomApprovalStore } from '../services/room-approval.service';
 import { notificationStore } from '../services/notification.service';
 import { enableBotInRoom, sendTalkMessageStatus } from '../services/talk/talk-client.service';
-import { ADMIN_COMMANDS, isAdminUser } from '../features/agent/commands';
+import { ADMIN_COMMANDS, isAdminUser, adminList } from '../features/agent/commands';
 
 type WebhookRequest = express.Request & { rawBody?: Buffer };
 
@@ -197,6 +197,13 @@ export function registerTalkWebhook(app: express.Express): void {
                 await sendTalkMessage(roomToken, `🔔 **Notification rooms:**\n${body}`, messageId);
                 return;
             }
+        }
+
+        // ── Public query (works even in unapproved rooms, no session needed) ─
+        if (text === '$admin' || text === '$admins' || text === '$refresh') {
+            const isAdmin = isAdminUser(user);
+            await sendTalkMessage(roomToken, `👑 Nextcloud admin(s): **${adminList()}**${isAdmin ? ' — you are an admin.' : ' — ask one of them to join this room and send \`ami $approve\` to authorize it.'}`, messageId);
+            return;
         }
 
         // ── Approval gate ───────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ export function isClosingMessage(message: string): boolean {
 }
 
 /** Commands any approved user can run. */
-export const USER_COMMANDS = ['$help', '$status', '$whoami', '$reset', '$end'];
+export const USER_COMMANDS = ['$help', '$status', '$whoami', '$reset', '$end', '$admin', '$refresh'];
 
 /** Commands only the Nextcloud admin account may run. */
 export const ADMIN_COMMANDS = ['$approve', '$revoke', '$list', '$notify-add', '$notify-remove', '$notify-list', '$notify-test'];
@@ -34,10 +34,18 @@ const ADMIN_COMMAND_DESCRIPTIONS: Record<string, string> = {
 
 /**
  * True when the sender is the configured Nextcloud admin account.
- * Pure string comparison against TALK_ADMIN_USER — no Talk API / DB / Apache call.
+ * Supports comma-separated TALK_ADMIN_USER (e.g. "admin,alice,bob") and
+ * case-insensitive comparison — no Talk API / DB call.
  */
 export function isAdminUser(user: User): boolean {
-    return config.talkAdminUser !== '' && user.id === config.talkAdminUser;
+    if (!config.talkAdminUser) return false;
+    const admins = config.talkAdminUser.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    return admins.includes(user.id.toLowerCase());
+}
+
+export function adminList(): string {
+    if (!config.talkAdminUser) return '(none — set TALK_ADMIN_USER)';
+    return config.talkAdminUser.split(',').map(s => s.trim()).filter(Boolean).join(', ');
 }
 
 /** The text shown for `$help`. Admins also see the admin command tier. */
@@ -55,6 +63,8 @@ export function helpMessage(isAdmin: boolean): string {
         '- `$reset` — Clear conversation and start fresh',
         '- `$status` — See who I\'m talking to and the conversation state',
         '- `$whoami` — Show the account I recognise you as',
+        '- `$admin` — Show who the Nextcloud admin is (for `ami $approve`)',
+        '- `$refresh` — Same as `$admin` — query without starting a chat',
         '- `$end` — End the conversation',
         '- `$help` — Show this message'
     ];
