@@ -2,7 +2,7 @@
 
 Standalone **Nextcloud Talk bot** that carries over the personality of *Ami*, the Amertron Help Desk assistant (from `CODENAME-AMI-TEAMS-CENGINEv1`): warm Taglish/English mirroring, IT help desk behavior, confidentiality guard, and the familiar commands.
 
-> 🧩 **Built for [Nextcloud All-in-One](https://github.com/nextcloud/all-in-one)** — companion repo: [`nextcloud-aio-customs`](https://github.com/miel-R/nextcloud-aio-customs) documents the AIO deployments this bot runs on: the **Tailscale-Funnel** setup (no open ports, `*.ts.net`) and the **production server** setup (ports 80/443/3478 open, real domain). Both deploy Ami **container-to-container** on the `nextcloud-aio` network.
+> 🧩 **Stock Nextcloud** — companion repo: [`nextcloud-stock-customs`](https://github.com/miel-R/nextcloud-stock-customs) (official `nextcloud:stable` + postgres + redis, **no 100-user limit**). Ami runs **container-to-container** on the `nextcloud` network.
 
 It does **not** use the Bot Framework / Microsoft 365 Agents Toolkit — Nextcloud Talk has its own bot protocol (webhook in, signed OCS request out), so this project implements that directly while reusing Ami's persona, AI service, and conversation logic.
 
